@@ -1,0 +1,1670 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acompanhamento de Vendas — Demonstração</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #FFFFFF;
+    --surface: #FFFFFF;
+    --surface-alt: #F3EEF7;
+    --border: #E3DCEA;
+    --text: #241A2C;
+    --text-muted: #766C81;
+    --accent: #4F2170;
+    --accent-soft: rgba(79, 33, 112, 0.10);
+    --accent-contrast: #FFFFFF;
+    --amber: #B5760A;
+    --amber-soft: rgba(244, 169, 59, 0.16);
+    --rose: #FF0000;
+    --rose-soft: rgba(255, 0, 0, 0.10);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 14px; line-height: 1.45;
+  }
+  h1, h2, h3, .display { font-family: 'Space Grotesk', 'Inter', sans-serif; letter-spacing: -0.01em; }
+  .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  header.top {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 28px; background: var(--accent); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  header.top .brand { display: flex; align-items: center; gap: 14px; }
+  header.top .brand img.logo { height: 40px; width: auto; border-radius: 6px; background: #fff; padding: 3px 6px; }
+  header.top .brand .brand-textos { display: flex; flex-direction: column; gap: 2px; }
+  header.top .brand strong { font-size: 18px; font-weight: 600; color: var(--accent-contrast); letter-spacing: 0.02em; }
+  header.top .brand span { color: rgba(255,255,255,0.72); font-size: 12.5px; }
+
+  nav.tabs { display: flex; gap: 4px; background: rgba(255,255,255,0.14); padding: 4px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.22); }
+  nav.tabs button {
+    appearance: none; border: none; background: transparent; color: rgba(255,255,255,0.75);
+    padding: 8px 16px; border-radius: 999px; font-family: 'Inter'; font-size: 13.5px; font-weight: 500;
+    cursor: pointer; transition: background .15s ease, color .15s ease;
+  }
+  nav.tabs button:hover { color: #ffffff; }
+  nav.tabs button.active { background: #ffffff; color: var(--accent); }
+
+  main { max-width: 1900px; margin: 0 auto; padding: 28px; width: 100%; }
+
+  /* ---- Painel lateral de upload: atualizar os dados direto no navegador (abre/fecha) ---- */
+  .btn-abrir-dados {
+    appearance: none; border: 1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.12); color: #ffffff;
+    border-radius: 8px; padding: 9px 16px; font-weight: 600; font-size: 13px; cursor: pointer;
+    font-family: 'Inter'; display: flex; align-items: center; gap: 8px; white-space: nowrap;
+  }
+  .btn-abrir-dados:hover { border-color: #ffffff; background: rgba(255,255,255,0.20); }
+  .btn-abrir-dados .dot { width: 7px; height: 7px; border-radius: 999px; background: rgba(255,255,255,0.55); }
+  .btn-abrir-dados .dot.ok { background: #ffffff; }
+
+  .upload-overlay {
+    position: fixed; inset: 0; background: rgba(36,26,44,0.35); backdrop-filter: blur(2px);
+    z-index: 39; opacity: 0; pointer-events: none; transition: opacity .2s ease;
+  }
+  .upload-overlay.aberto { opacity: 1; pointer-events: auto; }
+
+  .upload-bar {
+    position: fixed; top: 0; right: 0; height: 100%; width: 340px; max-width: 88vw;
+    display: flex; flex-direction: column; gap: 18px;
+    background: var(--surface); border-left: 1px solid var(--border);
+    padding: 22px 22px 24px; z-index: 40;
+    transform: translateX(100%); transition: transform .25s ease;
+    overflow-y: auto; box-shadow: -12px 0 32px rgba(36,26,44,0.15);
+  }
+  .upload-bar.aberto { transform: translateX(0); }
+  .upload-bar .upload-bar-head { display: flex; align-items: center; justify-content: space-between; }
+  .upload-bar .upload-bar-head strong { font-size: 15px; font-family: 'Space Grotesk'; }
+  .upload-bar .btn-fechar-dados {
+    appearance: none; border: none; background: transparent; color: var(--text-muted);
+    font-size: 20px; line-height: 1; cursor: pointer; padding: 2px 6px; border-radius: 6px;
+  }
+  .upload-bar .btn-fechar-dados:hover { color: var(--text); background: var(--surface-alt); }
+  .upload-bar .campo { display: flex; flex-direction: column; gap: 5px; }
+  .upload-bar label { font-size: 11.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .upload-bar input[type=file] {
+    font-size: 12px; color: var(--text-muted); max-width: 100%;
+  }
+  .upload-bar input[type=date] {
+    background: var(--surface-alt); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 7px 10px; font-family: 'IBM Plex Mono'; font-size: 13px; width: 100%;
+  }
+  .upload-bar button.primary {
+    background: var(--accent); color: var(--accent-contrast); border: none; border-radius: 8px;
+    padding: 10px 20px; font-weight: 600; font-size: 13.5px; cursor: pointer; font-family: 'Inter';
+  }
+  .upload-bar button.primary:hover { filter: brightness(1.08); }
+  .upload-bar .status {
+    font-size: 12.5px; color: var(--text-muted); white-space: pre-wrap;
+    font-family: 'IBM Plex Mono'; margin-top: 2px;
+  }
+  .upload-bar .status.erro { color: var(--rose); }
+  .upload-bar .status.sucesso { color: var(--accent); }
+
+  .lista-equipe { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+  .lista-equipe .item-equipe {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    background: var(--surface-alt); border: 1px solid var(--border); border-radius: 8px;
+    padding: 7px 10px; font-size: 12.5px;
+  }
+  .lista-equipe .item-equipe .info { display: flex; flex-direction: column; gap: 1px; overflow: hidden; }
+  .lista-equipe .item-equipe .info strong { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lista-equipe .item-equipe .info span { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lista-equipe .item-equipe button {
+    appearance: none; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    border-radius: 6px; padding: 4px 10px; font-size: 11.5px; font-weight: 600; cursor: pointer;
+    font-family: 'Inter'; white-space: nowrap; flex-shrink: 0;
+  }
+  .lista-equipe .item-equipe button.excluir:hover { border-color: var(--rose); color: var(--rose); }
+  .lista-equipe .item-equipe button.restaurar:hover { border-color: var(--accent); color: var(--accent); }
+  .lista-equipe .vazio { color: var(--text-muted); font-size: 12px; padding: 6px 2px; }
+  .btn-excluir-rca {
+    appearance: none; border: 1px solid var(--border); background: var(--surface); color: var(--text-muted);
+    border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 13px; line-height: 1;
+  }
+  .btn-excluir-rca:hover { border-color: var(--rose); color: var(--rose); }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 28px; }
+  .kpi-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px 20px; position: relative; overflow: hidden;
+  }
+  .kpi-card .label { color: var(--text-muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .kpi-card .value { font-size: 26px; font-weight: 600; margin-top: 6px; }
+  .kpi-card .sub { margin-top: 4px; font-size: 12.5px; color: var(--text-muted); }
+
+  section.tab-panel { display: none; }
+  section.tab-panel.active { display: block; animation: fade .25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  .panel-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; margin-bottom: 18px; }
+  .panel-card h2 { font-size: 16px; margin: 0 0 14px; font-weight: 600; }
+  .panel-card h2 .count { color: var(--text-muted); font-weight: 400; font-size: 13px; }
+
+  .toolbar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+  .toolbar input[type=search] {
+    background: var(--surface-alt); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px; font-family: 'Inter'; min-width: 220px;
+  }
+  .toolbar input[type=search]::placeholder { color: var(--text-muted); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .table-scroll { overflow-x: auto; }
+  thead th {
+    text-align: left; color: var(--text-muted); font-weight: 500; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 10px; border-bottom: 1px solid var(--border);
+    cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  thead th:hover { color: var(--text); }
+  tbody td { padding: 9px 10px; border-bottom: 1px solid rgba(36,26,44,0.08); white-space: nowrap; }
+  tbody tr:hover { background: rgba(36,26,44,0.03); }
+
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 500; }
+  .badge.ok { background: var(--accent-soft); color: var(--accent); }
+  .badge.warn { background: var(--amber-soft); color: var(--amber); }
+  .badge.bad { background: var(--rose-soft); color: var(--rose); }
+  .badge.novato { background: rgba(36,26,44,0.06); color: var(--text-muted); }
+  .badge.manual { background: var(--surface-alt); color: var(--text-muted); }
+
+  .posit-input {
+    width: 48px; background: var(--surface-alt); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 4px 6px; font-family: 'IBM Plex Mono'; font-size: 12.5px; text-align: right;
+  }
+  .posit-input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+  .posit-cell { display: flex; align-items: center; gap: 6px; }
+
+  /* gauge: barra horizontal com marcador em 100% — a "régua de rota" do painel */
+  .gauge { position: relative; width: 130px; height: 8px; background: var(--surface-alt); border-radius: 999px; overflow: visible; }
+  .gauge .fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 999px; background: var(--accent); }
+  .gauge .fill.warn { background: var(--amber); }
+  .gauge .fill.bad { background: var(--rose); }
+  .gauge .tick { position: absolute; top: -3px; left: 100%; width: 2px; height: 14px; background: rgba(36,26,44,0.30); }
+  .gauge-wrap { display: flex; align-items: center; gap: 8px; }
+  .gauge-pct { font-family: 'IBM Plex Mono'; font-size: 12px; min-width: 46px; text-align: right; }
+
+  .chart-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; margin-bottom: 18px; }
+  @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
+  canvas { max-height: 280px; }
+
+  .empty { color: var(--text-muted); font-size: 13px; padding: 20px 0; text-align: center; }
+  footer { text-align: center; color: #fff; font-size: 13px; padding: 16px 24px; background: var(--accent); font-weight: 600; letter-spacing: 0.02em; }
+
+  .gerencia-secao { margin-bottom: 26px; }
+  .gerencia-secao:last-child { margin-bottom: 0; }
+  .gerencia-secao h3 {
+    font-size: 13px; font-weight: 700; color: #ffffff; text-transform: uppercase;
+    letter-spacing: 0.04em; margin: 0 0 14px; padding: 10px 16px; border-radius: 8px;
+    background: var(--accent);
+    display: flex; align-items: center; gap: 8px; justify-content: space-between;
+  }
+  .gerencia-secao h3 .titulo-esq { display: flex; align-items: center; gap: 8px; }
+  .gerencia-secao h3 .count-mini { color: rgba(255,255,255,0.75); font-weight: 400; text-transform: none; font-size: 12px; }
+  .btn-baixar-secao {
+    appearance: none; border: 1px solid rgba(255,255,255,0.55); background: transparent; color: #ffffff;
+    border-radius: 6px; padding: 5px 12px; font-size: 11.5px; font-weight: 600; cursor: pointer;
+    font-family: 'Inter'; text-transform: none; letter-spacing: normal; white-space: nowrap;
+  }
+  .btn-baixar-secao:hover { background: rgba(255,255,255,0.18); }
+
+  /* ---- Bloco "Parcial" no estilo que os supervisores já reconhecem (envio WhatsApp), em modo noturno ---- */
+  .parcial-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 18px; flex-wrap: wrap; }
+  .parcial-toolbar select {
+    background: var(--surface-alt); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px; font-family: 'Inter';
+  }
+  .parcial-toolbar .hint { color: var(--text-muted); font-size: 12.5px; }
+  .previsao-upload-box {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: var(--surface-alt); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 16px; margin-bottom: 16px;
+  }
+  .previsao-upload-box strong { font-size: 13px; }
+  .previsao-upload-box input[type=file] { font-size: 12px; color: var(--text-muted); max-width: 260px; }
+  .previsao-upload-box button {
+    appearance: none; border: none; background: var(--accent); color: #ffffff;
+    border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 13px; cursor: pointer;
+    font-family: 'Inter'; white-space: nowrap;
+  }
+  .previsao-upload-box button:hover { filter: brightness(1.1); }
+  .previsao-upload-box .status {
+    font-size: 12.5px; color: var(--text-muted); flex-basis: 100%; white-space: pre-wrap;
+    font-family: 'IBM Plex Mono';
+  }
+  .previsao-upload-box .status.erro { color: var(--rose); }
+  .previsao-upload-box .status.sucesso { color: var(--accent); }
+  .parcial-block {
+    background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+    margin-bottom: 22px; font-family: 'Inter', sans-serif; box-shadow: 0 4px 18px rgba(36,26,44,0.12);
+  }
+  .parcial-block .titulo {
+    background: var(--accent); color: var(--accent-contrast); text-align: center; font-weight: 700;
+    font-size: 15px; padding: 10px 0; font-family: 'Space Grotesk';
+  }
+  .parcial-block .titulo .hora-atualizacao { font-weight: 400; font-size: 12px; color: rgba(255,255,255,0.7); font-family: 'Inter', sans-serif; }
+  .parcial-block .toolbar-baixar { padding: 8px 12px; background: rgba(36,26,44,0.03); display: flex; justify-content: flex-end; }
+  .parcial-block .toolbar-baixar button {
+    appearance: none; border: 1px solid var(--accent); background: transparent; color: var(--accent);
+    border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+    font-family: 'Inter';
+  }
+  .parcial-block .toolbar-baixar button:hover { background: var(--accent); color: var(--accent-contrast); }
+  .parcial-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .parcial-table th {
+    background: var(--accent-soft); color: var(--accent); font-weight: 700; padding: 7px 8px; text-align: center;
+    border: 1px solid rgba(79, 33, 112, 0.18); text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.02em;
+  }
+  .parcial-table td { padding: 6px 8px; text-align: center; border: 1px solid rgba(36,26,44,0.08); color: var(--text); }
+  .parcial-table td.rca-nome { text-align: left; font-weight: 600; }
+  .parcial-table td.destaque { background: rgba(244, 169, 59, 0.20); font-weight: 700; color: #6B4300; }
+  .parcial-table td.diff { background: rgba(79, 33, 112, 0.08); }
+  .parcial-table td.editavel input {
+    width: 56px; background: var(--surface-alt); border: 1px solid var(--border); color: var(--text);
+    border-radius: 5px; padding: 3px 5px;
+    font-family: 'IBM Plex Mono'; font-size: 12px; text-align: center;
+  }
+  .parcial-table td.editavel input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+  .previsao-input {
+    width: 118px !important; text-align: right !important;
+    background: var(--surface-alt); border: 1px solid var(--border); color: #6B4300;
+    border-radius: 5px; padding: 3px 8px; font-family: 'IBM Plex Mono'; font-size: 12px; font-weight: 600;
+  }
+  .previsao-input:focus { outline: 2px solid var(--accent); border-color: var(--accent); text-align: left !important; }
+  .parcial-table tr.total td { background: rgba(79, 33, 112, 0.06); font-weight: 700; }
+  .parcial-table td.pctfat { font-weight: 700; }
+  .parcial-table tr.linha-sem-venda td { background: #FF746C !important; color: #3A0A08; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <img class="logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHMAAABACAYAAAAprUjlAAAG9UlEQVR4nO2df0wTZx/AP21poQVCCzGKdciPjMg70gVfkimImSwujCUbCXGTzVUIUZZglhiTJfCHS5a5xEnEqfujqUsmCdki/oHgO+N4RdlImNq5jIDlXYQpK+I6GfoOKqPQ7o/JWaQVqmjPy/NJ+sfdPT++d58+z3O9e3qn8vv9fgSKQB3pAASLR9R8Cc4XFDyJOAQL4IXvvnvgdlWoblZIlC+hpAbtZoVIeRPKz5yWeX/C+Zq24Mkxnxt1OIkFkeV+H/f7Cnk2K0TKkwd5kWQGWhYi5U2gn0Bv4nemghAyFYSQqSCETAUhZCoIIVNBCJkKQshUEPPeAosEk6Oj/Hf9evxTUwAkFxWxur4+aNrfv/2Wa8eOcau7m8nRUTTR0egSE4lLT+ffBw+i1un4qaYGV3OzlGf9iRPEZ2ZKy384HHS98460nF5RQdb77wPMyRuISqOhuKfnEfd28ZClzOsnT0oiAX5rb8f7559o4+PvJfL76d69m1+PHyfKYOC53btZtnEj0+Pj/L+vj2tffYV/ejpo+de+/JLsDz6Qlq82Ni4ornVNTSRkZz/cTj0BZNnNuk6cACAqLg4A3+Qkw19/PSvNwBdf8Ovx4wD8q7aWFa+/TpTBQPSSJSwpKCD3s8/Q6PVByx9qaWFqbAyACbebG21tj2tXniiykznW38/t3l4A0qxW9MnJwD3BAH6fj/7PPwdAZzRifu21BZefkJ3NlMcjlTd4twUbLZbF2oWIITuZgePT8uJikouKABj98UfGBwcBGP/lFyZHRgCITU9HrdUuuPzUt98G/ulqfV4vg01NAKx8663FCD+iyEqm3+dj6ORJAOIzM4nLyJBkAgzdbU3e27elddEmU1h1LH3pJWKWLmWsv5+eDz/kr5s3ic/MJCk3d968nZs28Z+sLOlz8d13w6r7cSOrE6CR779n4sYNAJa/8goARosFw4oVeFwuhlpayNyxA21CgpTnr9HRsOpQaTSkvPkmPx88KI25qQtsleIEKAwCx8X/ffqp1AI8LhcAHpeLP374gdi0NHRJSQCMDwzg83rDqifljTekrjkqPj6sMVfOyEbmlMcjnVVmvvcerzqdsz56sxn4Z0xVqdVkVFYCMHnrFkOtrWHVFZ2UxLKXXwZgRUlJyLPepw3ZyLzxzTdM37kDQOLq1XO2z6wbPn2a6YkJ0svLeaa0FIDLH3/MUEsL03fuMDkyws2uLhw7dkjlBSOnro5XnU6eq619DHsTGWQzZs50sSqNBuPzz8/ZbsrJYai1lamxMX5rb2d5cTGWjz5i2caNDB47hvOTT/iptha1VovOZCLu2WdRaTSLGmPnpk1z1r14+jSxKSmLWs/DIk21FHOAni6C+ZJNNyt4dIRMBSFkKgghU0EImQpCyFQQQqaCEDIVhJCpIIRMBSFkKgghU0EImQoiYrfAHA4H9fX1xMTEsHLlSsrLy3G73Xg8HlJTUzlw4ABut5tVq1ZRU1OD1Wqdlb+kpITm5ma0Wi2FhYVYrVYcDgcejweDwUB9fT0ajYacnBx27tzJ2bNnMRqN5OTk4HK56OrqIi0tbVb6wFjMZjNHjhzh4sWLGI1GKisrycrKkuIOrPfq1avs37+furo6dDpdhI5ohO9nVlVVsXbtWpxOJw0NDRTdnbx16dIlSktLycvLQ6VSAdDY2MjAwADd3d2UlJTgcDioqqrCYrGwd+/eoGXn5uayb98+vAuYVnJ/LHl5eej1eg4fPozb7cZms7Fnzx4pbWC9nZ2dlJWVceHCBdatW7dYhydsIt7NarVaLBYLavW9UDZs2EB/fz92u53Ozs6QeW02G9XV1eTn5wfdtm3bNoxGI1FRUahUKmaekuP3+6UvSahYXC4XhYWFxMTEkJKSQnJyMuPj43Pq9Xq9TE1NsWbNGi5fvvyoh+ORiLhMr9dLd3c3Pp9PWpeQkIDVamXr1q2cOnWKUM9qrKqq4tChQzidzln5Z7Y1NDQQGxtLX18fJpOJ3t5evF4vPT09mIJM0QyMxWw2097ezsTEBIODg1y/fp3Y2Ng59Z4/f562tja2bNlCR0cHw8PDi3h0wiOi3azNZuPo0aOzxkyApqYmmpub0el0FBQUBG1FMyQmJpKfn09HRwfxAf9Fsdls2O12UlNT2bx5M3q9njNnzrB9+3YyMjLYtWsXvXdnzgeLxWw2Y7fbqa6uxmQyUVFREbTe1tZW7HY7BoOBK1eucO7cOcrKyhb5SC0MMW3kKUVMG1E4QqaCEDIVhJCpIIRMBSFkKgghU0EImQpCkhnqGaYC+RHqAk/IlimEypMHeZklc75ngAsiy3zP0A/6XhMhUf4Eu34etJsVF9rlTSg/Id84NINopfLhoV8fJXj6EL8zFcTfOxCzp8uU+wkAAAAASUVORK5CYII=" alt="ACME Distribuidora">
+    <div class="brand-textos">
+      <strong>ACOMPANHAMENTO DE VENDAS</strong>
+      <span>Gerência Região Norte e Região Sul · ACME Distribuidora</span>
+    </div>
+  </div>
+  <nav class="tabs" id="tabnav">
+    <button data-tab="gerencia" class="active">Gerência</button>
+    <button data-tab="supervisores">Supervisores</button>
+    <button data-tab="rcas">RCAs</button>
+    <button data-tab="zerados">Zerados</button>
+    <button data-tab="parcial">Parcial (envio)</button>
+  </nav>
+  <button class="btn-abrir-dados" id="btn-abrir-equipe">Equipe</button>
+  <button class="btn-abrir-dados" id="btn-abrir-dados"><span class="dot" id="dot-dados"></span> Carregar dados</button>
+</header>
+
+<div class="upload-overlay" id="upload-overlay"></div>
+
+<aside class="upload-bar" id="upload-bar">
+  <div class="upload-bar-head">
+    <strong>Carregar dados</strong>
+    <button class="btn-fechar-dados" id="btn-fechar-dados" aria-label="Fechar">&times;</button>
+  </div>
+  <div class="campo">
+    <label for="file-detalhamento">Detalhamento por RCA (diário) — obrigatório</label>
+    <input type="file" id="file-detalhamento" accept=".xls,.xml">
+  </div>
+  <div class="campo">
+    <label for="file-visao-mensal">Visão Mensal (opcional)</label>
+    <input type="file" id="file-visao-mensal" accept=".xls,.xml">
+  </div>
+  <div class="campo">
+    <label for="input-data-ref">Data de referência</label>
+    <input type="date" id="input-data-ref">
+  </div>
+  <button class="primary" id="btn-carregar-dados">Carregar dados</button>
+  <div class="status" id="upload-status"></div>
+</aside>
+
+<div class="upload-overlay" id="equipe-overlay"></div>
+
+<aside class="upload-bar" id="equipe-bar">
+  <div class="upload-bar-head">
+    <strong>Gerenciar equipe</strong>
+    <button class="btn-fechar-dados" id="btn-fechar-equipe" aria-label="Fechar">&times;</button>
+  </div>
+
+  <div class="campo">
+    <label>Adicionar vendedor</label>
+  </div>
+  <div class="campo">
+    <label for="novo-rca-cod">Código RCA</label>
+    <input type="text" id="novo-rca-cod" placeholder="Ex.: 2650" inputmode="numeric">
+  </div>
+  <div class="campo">
+    <label for="novo-rca-nome">Nome</label>
+    <input type="text" id="novo-rca-nome" placeholder="Nome completo">
+  </div>
+  <div class="campo">
+    <label for="novo-rca-supervisor">Supervisor</label>
+    <select id="novo-rca-supervisor"></select>
+  </div>
+  <div class="campo">
+    <label for="novo-rca-meta-dia">Meta necessária do dia (R$)</label>
+    <input type="number" id="novo-rca-meta-dia" step="0.01" placeholder="0,00">
+  </div>
+  <div class="campo">
+    <label for="novo-rca-meta-pos">Meta de positivação do dia</label>
+    <input type="number" id="novo-rca-meta-pos" step="1" placeholder="0">
+  </div>
+  <button class="primary" id="btn-adicionar-rca">Adicionar vendedor</button>
+  <div class="status" id="equipe-status"></div>
+
+  <div class="campo" style="margin-top:6px;">
+    <label>Vendedores ativos</label>
+    <input type="search" id="busca-equipe-ativos" placeholder="Buscar por nome, código ou supervisor...">
+  </div>
+  <div id="lista-equipe-ativos" class="lista-equipe"></div>
+
+  <div class="campo" style="margin-top:6px;">
+    <label>Vendedores excluídos</label>
+  </div>
+  <div id="lista-equipe-excluidos" class="lista-equipe"></div>
+</aside>
+
+<main>
+
+  <div class="kpi-grid" id="kpi-grid"></div>
+
+  <section class="tab-panel active" id="tab-gerencia">
+    <div class="chart-grid">
+      <div class="panel-card">
+        <h2>Vendido hoje vs. necessidade do dia, por gerência</h2>
+        <canvas id="chart-gerencia-dia"></canvas>
+      </div>
+      <div class="panel-card">
+        <h2>% da meta do mês batida</h2>
+        <canvas id="chart-gerencia-mes"></canvas>
+      </div>
+    </div>
+    <div class="panel-card">
+      <div class="toolbar"><input type="search" id="input-filtro-gerencia" placeholder="Filtrar gerência..." data-target="table-gerencia"></div>
+      <h2>Detalhe por gerência</h2>
+      <div class="table-scroll"><table id="table-gerencia"></table></div>
+    </div>
+  </section>
+
+  <section class="tab-panel" id="tab-supervisores">
+    <div class="panel-card">
+      <div class="toolbar"><input type="search" placeholder="Filtrar supervisor..." data-target="container-supervisores"></div>
+      <h2>Resumo por supervisor <span class="count" id="count-supervisores"></span></h2>
+      <div id="container-supervisores"></div>
+    </div>
+  </section>
+
+  <section class="tab-panel" id="tab-rcas">
+    <div class="panel-card">
+      <div class="toolbar"><input type="search" placeholder="Filtrar RCA ou supervisor..." data-target="container-rcas"></div>
+      <h2>Todos os RCAs <span class="count" id="count-rcas"></span></h2>
+      <p style="color:var(--text-muted); font-size:12.5px; margin:-6px 0 14px;">
+        A coluna <strong>Posit. dia</strong> é editável — os valores digitados aqui ficam salvos
+        neste navegador pra data de referência selecionada e substituem o valor automático do HUB
+        (marcado com o selo <span class="badge manual">manual</span>).
+      </p>
+      <div id="container-rcas"></div>
+    </div>
+  </section>
+
+  <section class="tab-panel" id="tab-zerados">
+    <div class="panel-card">
+      <h2>RCAs sem venda hoje <span class="count" id="count-zerados"></span></h2>
+      <div id="container-zerados"></div>
+    </div>
+  </section>
+
+  <section class="tab-panel" id="tab-parcial">
+    <div class="previsao-upload-box">
+      <strong>Atualizar Previsão do dia:</strong>
+      <input type="file" id="file-previsao-dia" accept=".xlsx,.xls">
+      <button id="btn-atualizar-previsao">Atualizar previsão</button>
+      <span class="hint">Aceita a planilha modelo "Previsão dia" (uma aba por supervisor, colunas Vendedor e Previsão do Dia).</span>
+      <div id="previsao-upload-status" class="status"></div>
+    </div>
+    <div class="parcial-toolbar">
+      <label for="select-supervisor-parcial" class="hint">Mostrar:</label>
+      <select id="select-supervisor-parcial"></select>
+      <span class="hint">Meta SKU, Meta Pos. e Previsão são editáveis — clique em "Baixar imagem" em cada bloco pra mandar no grupo do supervisor.</span>
+    </div>
+    <div id="parcial-container"></div>
+  </section>
+
+</main>
+
+<footer>Desenvolvido por Raphael França</footer>
+
+<script>
+const DATA = {"data_ref": "2026-01-15", "rcas": [{"Situacao": "ATIVO", "PJ/CLT": "CLT", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "10 - GERENCIA REGIAO NORTE", "Supervisor": "10 - EQUIPE EXPRESS - MENDES", "RCA": "1000 - CARLOS MENDES - EQUIPE EXPRESS", "KM": 67.3, "Meta Necessaria (Dia)": 731.38, "Meta Linear (Dia)": 2734.68, "Vendas (Dia)": 0.0, "Devol. (Dia)": null, "% Linear Dia": 0.0, "% Necessaria Dia": 0.0, "1o Pedido": "-", "Status": "Sem vendas", "Posit. Dia": 0.0, "Meta Posit Dia": 4.1, "SKU PDV": null, "Meta Mes (R$)": 95429.55, "Vendas Mes (R$)": 26890.39, "% Mes": 0.282, "Novato": true, "Cod RCA": "1000", "Media_Positivacao_Dia": null, "SKU_PDV_Mensal": null, "Dias_Sem_Venda_Qtde": 0.0, "Dias_Sem_Venda_Pct": 0.0, "Dias_Abaixo_Meta_Qtde": 3.0, "Dias_Abaixo_Meta_Pct": 0.19, "Media_Horario_1o_Pedido": null, "Pedidos_Apos_12h_Qtde": 1.0, "Pedidos_Apos_12h_Pct": 0.06, "Ticket_Medio_Dia": null, "Posit. Dia (HUB)": 0.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "RCA", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "10 - GERENCIA REGIAO NORTE", "Supervisor": "10 - EQUIPE EXPRESS - MENDES", "RCA": "1001 - FERNANDA SOUZA - EQUIPE EXPRESS", "KM": 65.0, "Meta Necessaria (Dia)": 2476.43, "Meta Linear (Dia)": 4103.97, "Vendas (Dia)": 1602.23, "Devol. (Dia)": null, "% Linear Dia": 0.39, "% Necessaria Dia": 0.647, "1o Pedido": "08:44", "Status": "Com vendas", "Posit. Dia": 4.0, "Meta Posit Dia": 3.5, "SKU PDV": 8.8, "Meta Mes (R$)": 117432.78, "Vendas Mes (R$)": 68885.43, "% Mes": 0.587, "Novato": false, "Cod RCA": "1001", "Media_Positivacao_Dia": 3.6, "SKU_PDV_Mensal": 9.0, "Dias_Sem_Venda_Qtde": 2.0, "Dias_Sem_Venda_Pct": 0.12, "Dias_Abaixo_Meta_Qtde": 9.0, "Dias_Abaixo_Meta_Pct": 0.56, "Media_Horario_1o_Pedido": "09:51", "Pedidos_Apos_12h_Qtde": 0.0, "Pedidos_Apos_12h_Pct": 0.0, "Ticket_Medio_Dia": 400.5575, "Posit. Dia (HUB)": 4.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "CLT", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "10 - GERENCIA REGIAO NORTE", "Supervisor": "10 - EQUIPE EXPRESS - MENDES", "RCA": "1002 - RICARDO ALVES - EQUIPE EXPRESS", "KM": 87.6, "Meta Necessaria (Dia)": 2390.73, "Meta Linear (Dia)": 3135.6, "Vendas (Dia)": 3440.01, "Devol. (Dia)": null, "% Linear Dia": 1.097, "% Necessaria Dia": 1.439, "1o Pedido": "10:12", "Status": "Com vendas", "Posit. Dia": 1.0, "Meta Posit Dia": 2.6, "SKU PDV": 11.1, "Meta Mes (R$)": 77363.28, "Vendas Mes (R$)": 25513.79, "% Mes": 0.33, "Novato": false, "Cod RCA": "1002", "Media_Positivacao_Dia": 4.5, "SKU_PDV_Mensal": 9.0, "Dias_Sem_Venda_Qtde": 2.0, "Dias_Sem_Venda_Pct": 0.12, "Dias_Abaixo_Meta_Qtde": 7.0, "Dias_Abaixo_Meta_Pct": 0.44, "Media_Horario_1o_Pedido": "10:53", "Pedidos_Apos_12h_Qtde": 2.0, "Pedidos_Apos_12h_Pct": 0.12, "Ticket_Medio_Dia": 3440.01, "Posit. Dia (HUB)": 1.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "RCA", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "10 - GERENCIA REGIAO NORTE", "Supervisor": "10 - EQUIPE EXPRESS - MENDES", "RCA": "1003 - JULIANA ROCHA - EQUIPE EXPRESS", "KM": 20.4, "Meta Necessaria (Dia)": 3428.3, "Meta Linear (Dia)": 2800.93, "Vendas (Dia)": 3389.31, "Devol. (Dia)": null, "% Linear Dia": 1.21, "% Necessaria Dia": 0.989, "1o Pedido": "10:15", "Status": "Com vendas", "Posit. Dia": 2.0, "Meta Posit Dia": 3.9, "SKU PDV": 12.4, "Meta Mes (R$)": 115523.47, "Vendas Mes (R$)": 108379.72, "% Mes": 0.938, "Novato": false, "Cod RCA": "1003", "Media_Positivacao_Dia": 4.4, "SKU_PDV_Mensal": 11.2, "Dias_Sem_Venda_Qtde": 0.0, "Dias_Sem_Venda_Pct": 0.0, "Dias_Abaixo_Meta_Qtde": 3.0, "Dias_Abaixo_Meta_Pct": 0.19, "Media_Horario_1o_Pedido": "08:51", "Pedidos_Apos_12h_Qtde": 2.0, "Pedidos_Apos_12h_Pct": 0.12, "Ticket_Medio_Dia": 1694.655, "Posit. Dia (HUB)": 2.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "CLT", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "10 - GERENCIA REGIAO NORTE", "Supervisor": "10 - EQUIPE EXPRESS - MENDES", "RCA": "1004 - BRUNO CASTRO - EQUIPE EXPRESS", "KM": 20.6, "Meta Necessaria (Dia)": 5560.96, "Meta Linear (Dia)": 4828.73, "Vendas (Dia)": 3639.37, "Devol. (Dia)": null, "% Linear Dia": 0.754, "% Necessaria Dia": 0.654, "1o Pedido": "10:29", "Status": "Com vendas", "Posit. Dia": 2.0, "Meta Posit Dia": 3.3, "SKU PDV": 11.6, "Meta Mes (R$)": 93682.09, "Vendas Mes (R$)": 48034.71, "% Mes": 0.513, "Novato": false, "Cod RCA": "1004", "Media_Positivacao_Dia": 6.8, "SKU_PDV_Mensal": 17.0, "Dias_Sem_Venda_Qtde": 3.0, "Dias_Sem_Venda_Pct": 0.19, "Dias_Abaixo_Meta_Qtde": 5.0, "Dias_Abaixo_Meta_Pct": 0.31, "Media_Horario_1o_Pedido": "08:08", "Pedidos_Apos_12h_Qtde": 3.0, "Pedidos_Apos_12h_Pct": 0.19, "Ticket_Medio_Dia": 1819.685, "Posit. Dia (HUB)": 2.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "CLT", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "10 - GERENCIA REGIAO NORTE", "Supervisor": "10 - EQUIPE EXPRESS - MENDES", "RCA": "1005 - PATRÍCIA LIMA - EQUIPE EXPRESS", "KM": 77.8, "Meta Necessaria (Dia)": 717.83, "Meta Linear (Dia)": 2458.52, "Vendas (Dia)": 3320.61, "Devol. (Dia)": null, "% Linear Dia": 1.351, "% Necessaria Dia": 4.626, "1o Pedido": "10:29", "Status": "Com vendas", "Posit. Dia": 3.0, "Meta Posit Dia": 5.4, "SKU PDV": 30.7, "Meta Mes (R$)": 60688.86, "Vendas Mes (R$)": 58912.0, "% Mes": 0.971, "Novato": false, "Cod RCA": "1005", "Media_Positivacao_Dia": 7.4, "SKU_PDV_Mensal": 13.4, "Dias_Sem_Venda_Qtde": 2.0, "Dias_Sem_Venda_Pct": 0.12, "Dias_Abaixo_Meta_Qtde": 12.0, "Dias_Abaixo_Meta_Pct": 0.75, "Media_Horario_1o_Pedido": "10:21", "Pedidos_Apos_12h_Qtde": 0.0, "Pedidos_Apos_12h_Pct": 0.0, "Ticket_Medio_Dia": 1106.87, "Posit. Dia (HUB)": 3.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "CLT", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "10 - GERENCIA REGIAO NORTE", "Supervisor": "10 - EQUIPE EXPRESS - MENDES", "RCA": "1006 - ANDRÉ FREITAS - EQUIPE EXPRESS", "KM": 41.9, "Meta Necessaria (Dia)": 5595.64, "Meta Linear (Dia)": 4861.45, "Vendas (Dia)": 2803.17, "Devol. (Dia)": null, "% Linear Dia": 0.577, "% Necessaria Dia": 0.501, "1o Pedido": "08:55", "Status": "Com vendas", "Posit. Dia": 3.0, "Meta Posit Dia": 5.0, "SKU PDV": 19.7, "Meta Mes (R$)": 71934.67, "Vendas Mes (R$)": 44881.04, "% Mes": 0.624, "Novato": false, "Cod RCA": "1006", "Media_Positivacao_Dia": 4.1, "SKU_PDV_Mensal": 17.5, "Dias_Sem_Venda_Qtde": 4.0, "Dias_Sem_Venda_Pct": 0.25, "Dias_Abaixo_Meta_Qtde": 0.0, "Dias_Abaixo_Meta_Pct": 0.0, "Media_Horario_1o_Pedido": "10:20", "Pedidos_Apos_12h_Qtde": 3.0, "Pedidos_Apos_12h_Pct": 0.19, "Ticket_Medio_Dia": 934.39, "Posit. Dia (HUB)": 3.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "CLT", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "10 - GERENCIA REGIAO NORTE", "Supervisor": "11 - EQUIPE EXPRESS - SOUZA", "RCA": "1007 - CAMILA DUARTE - EQUIPE EXPRESS", "KM": 79.3, "Meta Necessaria (Dia)": 2108.23, "Meta Linear (Dia)": 4495.0, "Vendas (Dia)": 0.0, "Devol. (Dia)": null, "% Linear Dia": 0.0, "% Necessaria Dia": 0.0, "1o Pedido": "-", "Status": "Sem vendas", "Posit. Dia": 0.0, "Meta Posit Dia": 5.3, "SKU PDV": null, "Meta Mes (R$)": 65139.21, "Vendas Mes (R$)": 47941.84, "% Mes": 0.736, "Novato": false, "Cod RCA": "1007", "Media_Positivacao_Dia": null, "SKU_PDV_Mensal": null, "Dias_Sem_Venda_Qtde": 0.0, "Dias_Sem_Venda_Pct": 0.0, "Dias_Abaixo_Meta_Qtde": 12.0, "Dias_Abaixo_Meta_Pct": 0.75, "Media_Horario_1o_Pedido": null, "Pedidos_Apos_12h_Qtde": 1.0, "Pedidos_Apos_12h_Pct": 0.06, "Ticket_Medio_Dia": null, "Posit. Dia (HUB)": 0.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "CLT", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "10 - GERENCIA REGIAO NORTE", "Supervisor": "11 - EQUIPE EXPRESS - SOUZA", "RCA": "1008 - DIEGO RAMOS - EQUIPE EXPRESS", "KM": 85.3, "Meta Necessaria (Dia)": 1829.63, "Meta Linear (Dia)": 2495.38, "Vendas (Dia)": 5307.56, "Devol. (Dia)": null, "% Linear Dia": 2.127, "% Necessaria Dia": 2.901, "1o Pedido": "10:44", "Status": "Com vendas", "Posit. Dia": 2.0, "Meta Posit Dia": 4.6, "SKU PDV": 16.4, "Meta Mes (R$)": 100301.22, "Vendas Mes (R$)": 62529.84, "% Mes": 0.623, "Novato": false, "Cod RCA": "1008", "Media_Positivacao_Dia": 8.8, "SKU_PDV_Mensal": 12.5, "Dias_Sem_Venda_Qtde": 1.0, "Dias_Sem_Venda_Pct": 0.06, "Dias_Abaixo_Meta_Qtde": 3.0, "Dias_Abaixo_Meta_Pct": 0.19, "Media_Horario_1o_Pedido": "08:21", "Pedidos_Apos_12h_Qtde": 0.0, "Pedidos_Apos_12h_Pct": 0.0, "Ticket_Medio_Dia": 2653.78, "Posit. Dia (HUB)": 2.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "CLT", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "10 - GERENCIA REGIAO NORTE", "Supervisor": "11 - EQUIPE EXPRESS - SOUZA", "RCA": "1009 - LARISSA PINTO - EQUIPE EXPRESS", "KM": 2.6, "Meta Necessaria (Dia)": 703.67, "Meta Linear (Dia)": 4123.52, "Vendas (Dia)": 0.0, "Devol. (Dia)": 264.34, "% Linear Dia": 0.0, "% Necessaria Dia": 0.0, "1o Pedido": "-", "Status": "Sem vendas", "Posit. Dia": 0.0, "Meta Posit Dia": 4.0, "SKU PDV": null, "Meta Mes (R$)": 76708.64, "Vendas Mes (R$)": 56412.65, "% Mes": 0.735, "Novato": false, "Cod RCA": "1009", "Media_Positivacao_Dia": null, "SKU_PDV_Mensal": null, "Dias_Sem_Venda_Qtde": 4.0, "Dias_Sem_Venda_Pct": 0.25, "Dias_Abaixo_Meta_Qtde": 2.0, "Dias_Abaixo_Meta_Pct": 0.12, "Media_Horario_1o_Pedido": null, "Pedidos_Apos_12h_Qtde": 3.0, "Pedidos_Apos_12h_Pct": 0.19, "Ticket_Medio_Dia": null, "Posit. Dia (HUB)": 0.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "CLT", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "10 - GERENCIA REGIAO NORTE", "Supervisor": "11 - EQUIPE EXPRESS - SOUZA", "RCA": "1010 - FELIPE NOGUEIRA - EQUIPE EXPRESS", "KM": 73.1, "Meta Necessaria (Dia)": 556.2, "Meta Linear (Dia)": 2571.23, "Vendas (Dia)": 2387.32, "Devol. (Dia)": null, "% Linear Dia": 0.928, "% Necessaria Dia": 4.292, "1o Pedido": "10:03", "Status": "Com vendas", "Posit. Dia": 1.0, "Meta Posit Dia": 2.7, "SKU PDV": 26.6, "Meta Mes (R$)": 108035.55, "Vendas Mes (R$)": 38813.83, "% Mes": 0.359, "Novato": false, "Cod RCA": "1010", "Media_Positivacao_Dia": 4.2, "SKU_PDV_Mensal": 13.4, "Dias_Sem_Venda_Qtde": 1.0, "Dias_Sem_Venda_Pct": 0.06, "Dias_Abaixo_Meta_Qtde": 6.0, "Dias_Abaixo_Meta_Pct": 0.38, "Media_Horario_1o_Pedido": "08:17", "Pedidos_Apos_12h_Qtde": 3.0, "Pedidos_Apos_12h_Pct": 0.19, "Ticket_Medio_Dia": 2387.32, "Posit. Dia (HUB)": 1.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "RCA", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "10 - GERENCIA REGIAO NORTE", "Supervisor": "11 - EQUIPE EXPRESS - SOUZA", "RCA": "1011 - VANESSA COSTA - EQUIPE EXPRESS", "KM": 8.6, "Meta Necessaria (Dia)": 4986.64, "Meta Linear (Dia)": 4424.07, "Vendas (Dia)": 0.0, "Devol. (Dia)": null, "% Linear Dia": 0.0, "% Necessaria Dia": 0.0, "1o Pedido": "-", "Status": "Sem vendas", "Posit. Dia": 0.0, "Meta Posit Dia": 4.1, "SKU PDV": null, "Meta Mes (R$)": 60885.47, "Vendas Mes (R$)": 20899.72, "% Mes": 0.343, "Novato": false, "Cod RCA": "1011", "Media_Positivacao_Dia": null, "SKU_PDV_Mensal": null, "Dias_Sem_Venda_Qtde": 1.0, "Dias_Sem_Venda_Pct": 0.06, "Dias_Abaixo_Meta_Qtde": 2.0, "Dias_Abaixo_Meta_Pct": 0.12, "Media_Horario_1o_Pedido": null, "Pedidos_Apos_12h_Qtde": 3.0, "Pedidos_Apos_12h_Pct": 0.19, "Ticket_Medio_Dia": null, "Posit. Dia (HUB)": 0.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "CLT", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "11 - GERENCIA REGIAO SUL", "Supervisor": "20 - EQUIPE EXPRESS - ALVES", "RCA": "1012 - RODRIGO BARROS - EQUIPE EXPRESS", "KM": 37.3, "Meta Necessaria (Dia)": 1207.12, "Meta Linear (Dia)": 2175.91, "Vendas (Dia)": 1532.1, "Devol. (Dia)": null, "% Linear Dia": 0.704, "% Necessaria Dia": 1.269, "1o Pedido": "09:18", "Status": "Com vendas", "Posit. Dia": 4.0, "Meta Posit Dia": 4.6, "SKU PDV": 26.6, "Meta Mes (R$)": 107001.69, "Vendas Mes (R$)": 97571.77, "% Mes": 0.912, "Novato": false, "Cod RCA": "1012", "Media_Positivacao_Dia": 6.2, "SKU_PDV_Mensal": 9.9, "Dias_Sem_Venda_Qtde": 1.0, "Dias_Sem_Venda_Pct": 0.06, "Dias_Abaixo_Meta_Qtde": 0.0, "Dias_Abaixo_Meta_Pct": 0.0, "Media_Horario_1o_Pedido": "10:47", "Pedidos_Apos_12h_Qtde": 0.0, "Pedidos_Apos_12h_Pct": 0.0, "Ticket_Medio_Dia": 383.025, "Posit. Dia (HUB)": 4.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "CLT", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "11 - GERENCIA REGIAO SUL", "Supervisor": "20 - EQUIPE EXPRESS - ALVES", "RCA": "1013 - ALINE TEIXEIRA - EQUIPE EXPRESS", "KM": 53.4, "Meta Necessaria (Dia)": 3941.03, "Meta Linear (Dia)": 3508.55, "Vendas (Dia)": 5288.21, "Devol. (Dia)": 148.66, "% Linear Dia": 1.507, "% Necessaria Dia": 1.342, "1o Pedido": "10:04", "Status": "Com vendas", "Posit. Dia": 2.0, "Meta Posit Dia": 3.7, "SKU PDV": 33.2, "Meta Mes (R$)": 94180.52, "Vendas Mes (R$)": 78068.03, "% Mes": 0.829, "Novato": true, "Cod RCA": "1013", "Media_Positivacao_Dia": 3.3, "SKU_PDV_Mensal": 8.8, "Dias_Sem_Venda_Qtde": 4.0, "Dias_Sem_Venda_Pct": 0.25, "Dias_Abaixo_Meta_Qtde": 9.0, "Dias_Abaixo_Meta_Pct": 0.56, "Media_Horario_1o_Pedido": "10:20", "Pedidos_Apos_12h_Qtde": 2.0, "Pedidos_Apos_12h_Pct": 0.12, "Ticket_Medio_Dia": 2644.105, "Posit. Dia (HUB)": 2.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "CLT", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "11 - GERENCIA REGIAO SUL", "Supervisor": "20 - EQUIPE EXPRESS - ALVES", "RCA": "1014 - MARCELO VIEIRA - EQUIPE EXPRESS", "KM": 29.6, "Meta Necessaria (Dia)": 718.94, "Meta Linear (Dia)": 2796.84, "Vendas (Dia)": 2569.01, "Devol. (Dia)": null, "% Linear Dia": 0.919, "% Necessaria Dia": 3.573, "1o Pedido": "08:00", "Status": "Com vendas", "Posit. Dia": 4.0, "Meta Posit Dia": 4.4, "SKU PDV": 21.5, "Meta Mes (R$)": 65998.87, "Vendas Mes (R$)": 51982.98, "% Mes": 0.788, "Novato": false, "Cod RCA": "1014", "Media_Positivacao_Dia": 6.3, "SKU_PDV_Mensal": 9.3, "Dias_Sem_Venda_Qtde": 2.0, "Dias_Sem_Venda_Pct": 0.12, "Dias_Abaixo_Meta_Qtde": 1.0, "Dias_Abaixo_Meta_Pct": 0.06, "Media_Horario_1o_Pedido": "08:23", "Pedidos_Apos_12h_Qtde": 2.0, "Pedidos_Apos_12h_Pct": 0.12, "Ticket_Medio_Dia": 642.2525, "Posit. Dia (HUB)": 4.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "CLT", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "11 - GERENCIA REGIAO SUL", "Supervisor": "20 - EQUIPE EXPRESS - ALVES", "RCA": "1015 - DÉBORA MARTINS - EQUIPE EXPRESS", "KM": 49.8, "Meta Necessaria (Dia)": 3723.48, "Meta Linear (Dia)": 2907.55, "Vendas (Dia)": 2956.28, "Devol. (Dia)": null, "% Linear Dia": 1.017, "% Necessaria Dia": 0.794, "1o Pedido": "10:19", "Status": "Com vendas", "Posit. Dia": 1.0, "Meta Posit Dia": 5.3, "SKU PDV": 8.2, "Meta Mes (R$)": 66925.72, "Vendas Mes (R$)": 23894.89, "% Mes": 0.357, "Novato": false, "Cod RCA": "1015", "Media_Positivacao_Dia": 6.6, "SKU_PDV_Mensal": 10.7, "Dias_Sem_Venda_Qtde": 4.0, "Dias_Sem_Venda_Pct": 0.25, "Dias_Abaixo_Meta_Qtde": 3.0, "Dias_Abaixo_Meta_Pct": 0.19, "Media_Horario_1o_Pedido": "10:21", "Pedidos_Apos_12h_Qtde": 1.0, "Pedidos_Apos_12h_Pct": 0.06, "Ticket_Medio_Dia": 2956.28, "Posit. Dia (HUB)": 1.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "CLT", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "11 - GERENCIA REGIAO SUL", "Supervisor": "20 - EQUIPE EXPRESS - ALVES", "RCA": "1016 - THIAGO CORREIA - EQUIPE EXPRESS", "KM": 24.1, "Meta Necessaria (Dia)": 760.45, "Meta Linear (Dia)": 4724.48, "Vendas (Dia)": 4578.48, "Devol. (Dia)": 266.85, "% Linear Dia": 0.969, "% Necessaria Dia": 6.021, "1o Pedido": "08:40", "Status": "Com vendas", "Posit. Dia": 3.0, "Meta Posit Dia": 3.0, "SKU PDV": 17.7, "Meta Mes (R$)": 102340.05, "Vendas Mes (R$)": 82988.25, "% Mes": 0.811, "Novato": false, "Cod RCA": "1016", "Media_Positivacao_Dia": 3.7, "SKU_PDV_Mensal": 17.5, "Dias_Sem_Venda_Qtde": 1.0, "Dias_Sem_Venda_Pct": 0.06, "Dias_Abaixo_Meta_Qtde": 8.0, "Dias_Abaixo_Meta_Pct": 0.5, "Media_Horario_1o_Pedido": "08:53", "Pedidos_Apos_12h_Qtde": 2.0, "Pedidos_Apos_12h_Pct": 0.12, "Ticket_Medio_Dia": 1526.16, "Posit. Dia (HUB)": 3.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "CLT", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "11 - GERENCIA REGIAO SUL", "Supervisor": "20 - EQUIPE EXPRESS - ALVES", "RCA": "1017 - RENATA FARIAS - EQUIPE EXPRESS", "KM": 5.7, "Meta Necessaria (Dia)": 3773.71, "Meta Linear (Dia)": 3093.95, "Vendas (Dia)": 315.43, "Devol. (Dia)": null, "% Linear Dia": 0.102, "% Necessaria Dia": 0.084, "1o Pedido": "10:15", "Status": "Com vendas", "Posit. Dia": 1.0, "Meta Posit Dia": 3.6, "SKU PDV": 21.4, "Meta Mes (R$)": 112482.76, "Vendas Mes (R$)": 137660.57, "% Mes": 1.224, "Novato": false, "Cod RCA": "1017", "Media_Positivacao_Dia": 7.9, "SKU_PDV_Mensal": 17.3, "Dias_Sem_Venda_Qtde": 1.0, "Dias_Sem_Venda_Pct": 0.06, "Dias_Abaixo_Meta_Qtde": 2.0, "Dias_Abaixo_Meta_Pct": 0.12, "Media_Horario_1o_Pedido": "08:56", "Pedidos_Apos_12h_Qtde": 3.0, "Pedidos_Apos_12h_Pct": 0.19, "Ticket_Medio_Dia": 315.43, "Posit. Dia (HUB)": 1.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "RCA", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "11 - GERENCIA REGIAO SUL", "Supervisor": "21 - EQUIPE EXPRESS - ROCHA", "RCA": "1018 - GUSTAVO PIRES - EQUIPE EXPRESS", "KM": 31.2, "Meta Necessaria (Dia)": 5092.85, "Meta Linear (Dia)": 4792.45, "Vendas (Dia)": 4478.05, "Devol. (Dia)": null, "% Linear Dia": 0.934, "% Necessaria Dia": 0.879, "1o Pedido": "10:06", "Status": "Com vendas", "Posit. Dia": 4.0, "Meta Posit Dia": 5.1, "SKU PDV": 30.6, "Meta Mes (R$)": 73346.02, "Vendas Mes (R$)": 78229.88, "% Mes": 1.067, "Novato": false, "Cod RCA": "1018", "Media_Positivacao_Dia": 6.0, "SKU_PDV_Mensal": 11.1, "Dias_Sem_Venda_Qtde": 1.0, "Dias_Sem_Venda_Pct": 0.06, "Dias_Abaixo_Meta_Qtde": 3.0, "Dias_Abaixo_Meta_Pct": 0.19, "Media_Horario_1o_Pedido": "08:42", "Pedidos_Apos_12h_Qtde": 1.0, "Pedidos_Apos_12h_Pct": 0.06, "Ticket_Medio_Dia": 1119.5125, "Posit. Dia (HUB)": 4.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "RCA", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "11 - GERENCIA REGIAO SUL", "Supervisor": "21 - EQUIPE EXPRESS - ROCHA", "RCA": "1019 - BIANCA MOURA - EQUIPE EXPRESS", "KM": 78.1, "Meta Necessaria (Dia)": 2131.55, "Meta Linear (Dia)": 4900.67, "Vendas (Dia)": 2258.26, "Devol. (Dia)": null, "% Linear Dia": 0.461, "% Necessaria Dia": 1.059, "1o Pedido": "10:21", "Status": "Com vendas", "Posit. Dia": 1.0, "Meta Posit Dia": 2.8, "SKU PDV": 34.1, "Meta Mes (R$)": 70714.07, "Vendas Mes (R$)": 85743.24, "% Mes": 1.213, "Novato": false, "Cod RCA": "1019", "Media_Positivacao_Dia": 4.7, "SKU_PDV_Mensal": 9.1, "Dias_Sem_Venda_Qtde": 3.0, "Dias_Sem_Venda_Pct": 0.19, "Dias_Abaixo_Meta_Qtde": 5.0, "Dias_Abaixo_Meta_Pct": 0.31, "Media_Horario_1o_Pedido": "10:50", "Pedidos_Apos_12h_Qtde": 2.0, "Pedidos_Apos_12h_Pct": 0.12, "Ticket_Medio_Dia": 2258.26, "Posit. Dia (HUB)": 1.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "CLT", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "11 - GERENCIA REGIAO SUL", "Supervisor": "21 - EQUIPE EXPRESS - ROCHA", "RCA": "1020 - LEANDRO CARDOSO - EQUIPE EXPRESS", "KM": 47.0, "Meta Necessaria (Dia)": 2498.93, "Meta Linear (Dia)": 3155.59, "Vendas (Dia)": 3927.44, "Devol. (Dia)": 740.46, "% Linear Dia": 1.245, "% Necessaria Dia": 1.572, "1o Pedido": "10:43", "Status": "Com vendas", "Posit. Dia": 2.0, "Meta Posit Dia": 3.6, "SKU PDV": 6.2, "Meta Mes (R$)": 99854.26, "Vendas Mes (R$)": 57935.45, "% Mes": 0.58, "Novato": false, "Cod RCA": "1020", "Media_Positivacao_Dia": 5.0, "SKU_PDV_Mensal": 16.5, "Dias_Sem_Venda_Qtde": 2.0, "Dias_Sem_Venda_Pct": 0.12, "Dias_Abaixo_Meta_Qtde": 8.0, "Dias_Abaixo_Meta_Pct": 0.5, "Media_Horario_1o_Pedido": "09:42", "Pedidos_Apos_12h_Qtde": 3.0, "Pedidos_Apos_12h_Pct": 0.19, "Ticket_Medio_Dia": 1963.72, "Posit. Dia (HUB)": 2.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "RCA", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "11 - GERENCIA REGIAO SUL", "Supervisor": "21 - EQUIPE EXPRESS - ROCHA", "RCA": "1021 - PRISCILA GOMES - EQUIPE EXPRESS", "KM": 28.0, "Meta Necessaria (Dia)": 1439.92, "Meta Linear (Dia)": 2381.86, "Vendas (Dia)": 3757.52, "Devol. (Dia)": null, "% Linear Dia": 1.578, "% Necessaria Dia": 2.61, "1o Pedido": "10:36", "Status": "Com vendas", "Posit. Dia": 3.0, "Meta Posit Dia": 3.7, "SKU PDV": 29.8, "Meta Mes (R$)": 78232.5, "Vendas Mes (R$)": 36001.24, "% Mes": 0.46, "Novato": false, "Cod RCA": "1021", "Media_Positivacao_Dia": 8.1, "SKU_PDV_Mensal": 14.1, "Dias_Sem_Venda_Qtde": 2.0, "Dias_Sem_Venda_Pct": 0.12, "Dias_Abaixo_Meta_Qtde": 7.0, "Dias_Abaixo_Meta_Pct": 0.44, "Media_Horario_1o_Pedido": "09:28", "Pedidos_Apos_12h_Qtde": 1.0, "Pedidos_Apos_12h_Pct": 0.06, "Ticket_Medio_Dia": 1252.5067, "Posit. Dia (HUB)": 3.0, "Positivacao_Fonte": "hub"}, {"Situacao": "ATIVO", "PJ/CLT": "RCA", "Direcao": "Indústria Exemplo", "Coordenador": "Marcos Andrade", "Gerente": "11 - GERENCIA REGIAO SUL", "Supervisor": "21 - EQUIPE EXPRESS - ROCHA", "RCA": "1022 - EDUARDO SANTANA - EQUIPE EXPRESS", "KM": 86.5, "Meta Necessaria (Dia)": 3747.63, "Meta Linear (Dia)": 4207.88, "Vendas (Dia)": 3684.81, "Devol. (Dia)": null, "% Linear Dia": 0.876, "% Necessaria Dia": 0.983, "1o Pedido": "08:52", "Status": "Com vendas", "Posit. Dia": 2.0, "Meta Posit Dia": 4.5, "SKU PDV": 11.0, "Meta Mes (R$)": 71947.8, "Vendas Mes (R$)": 19744.3, "% Mes": 0.274, "Novato": false, "Cod RCA": "1022", "Media_Positivacao_Dia": 4.6, "SKU_PDV_Mensal": 12.8, "Dias_Sem_Venda_Qtde": 0.0, "Dias_Sem_Venda_Pct": 0.0, "Dias_Abaixo_Meta_Qtde": 7.0, "Dias_Abaixo_Meta_Pct": 0.44, "Media_Horario_1o_Pedido": "09:56", "Pedidos_Apos_12h_Qtde": 1.0, "Pedidos_Apos_12h_Pct": 0.06, "Ticket_Medio_Dia": 1842.405, "Posit. Dia (HUB)": 2.0, "Positivacao_Fonte": "hub"}], "supervisores": [{"Supervisor": "10 - EQUIPE EXPRESS - MENDES", "Gerente": "10 - GERENCIA REGIAO NORTE", "Qtd_RCAs": 7, "Meta_Necessaria_Dia": 20901.27, "Previsao_Dia": 0.0, "Vendas_Dia": 18194.699999999997, "Devolucao_Dia": 0.0, "Positivacao_Dia": 15.0, "Meta_Posit_Dia": 27.799999999999997, "Meta_Mes": 632054.7, "Vendas_Mes": 381497.07999999996, "SKU_PDV_Medio": 15.7167, "Pct_Necessaria_Dia": 0.8705069118, "Pct_Mes": 0.6035823798, "Ticket_Medio_Dia": 1212.98}, {"Supervisor": "11 - EQUIPE EXPRESS - SOUZA", "Gerente": "10 - GERENCIA REGIAO NORTE", "Qtd_RCAs": 5, "Meta_Necessaria_Dia": 10184.369999999999, "Previsao_Dia": 0.0, "Vendas_Dia": 7694.880000000001, "Devolucao_Dia": 264.34, "Positivacao_Dia": 3.0, "Meta_Posit_Dia": 20.699999999999996, "Meta_Mes": 411070.08999999997, "Vendas_Mes": 226597.87999999998, "SKU_PDV_Medio": 21.5, "Pct_Necessaria_Dia": 0.7555577812, "Pct_Mes": 0.5512390357, "Ticket_Medio_Dia": 2564.96}, {"Supervisor": "20 - EQUIPE EXPRESS - ALVES", "Gerente": "11 - GERENCIA REGIAO SUL", "Qtd_RCAs": 6, "Meta_Necessaria_Dia": 14124.73, "Previsao_Dia": 0.0, "Vendas_Dia": 17239.510000000002, "Devolucao_Dia": 415.51, "Positivacao_Dia": 15.0, "Meta_Posit_Dia": 24.6, "Meta_Mes": 548929.61, "Vendas_Mes": 472166.49, "SKU_PDV_Medio": 21.4333, "Pct_Necessaria_Dia": 1.2205196135, "Pct_Mes": 0.8601585365, "Ticket_Medio_Dia": 1149.300667}, {"Supervisor": "21 - EQUIPE EXPRESS - ROCHA", "Gerente": "11 - GERENCIA REGIAO SUL", "Qtd_RCAs": 5, "Meta_Necessaria_Dia": 14910.880000000001, "Previsao_Dia": 0.0, "Vendas_Dia": 18106.08, "Devolucao_Dia": 740.46, "Positivacao_Dia": 12.0, "Meta_Posit_Dia": 19.7, "Meta_Mes": 394094.65, "Vendas_Mes": 277654.11, "SKU_PDV_Medio": 22.34, "Pct_Necessaria_Dia": 1.2142864807, "Pct_Mes": 0.7045366132, "Ticket_Medio_Dia": 1508.84}], "gerencia": [{"Gerente": "10 - GERENCIA REGIAO NORTE", "Qtd_Supervisores": 2, "Qtd_RCAs": 12, "Meta_Necessaria_Dia": 31085.64, "Vendas_Dia": 25889.579999999998, "Positivacao_Dia": 18.0, "Meta_Mes": 1043124.7899999999, "Vendas_Mes": 608094.96, "Pct_Necessaria_Dia": 0.8328469351, "Pct_Mes": 0.5829551419}, {"Gerente": "11 - GERENCIA REGIAO SUL", "Qtd_Supervisores": 2, "Qtd_RCAs": 11, "Meta_Necessaria_Dia": 29035.61, "Vendas_Dia": 35345.590000000004, "Positivacao_Dia": 27.0, "Meta_Mes": 943024.26, "Vendas_Mes": 749820.6, "Pct_Necessaria_Dia": 1.2173186649, "Pct_Mes": 0.7951233407}], "zerados": [{"Supervisor": "10 - EQUIPE EXPRESS - MENDES", "Gerente": "10 - GERENCIA REGIAO NORTE", "RCA": "1000 - CARLOS MENDES - EQUIPE EXPRESS", "Situacao": "ATIVO", "Status": "Sem vendas", "Novato": true, "Meta Necessaria (Dia)": 731.38, "Vendas (Dia)": 0.0, "% Necessaria Dia": 0.0, "1o Pedido": "-", "Posit. Dia": 0.0, "Positivacao_Fonte": "hub", "Devol. (Dia)": null, "Zerado": true}, {"Supervisor": "11 - EQUIPE EXPRESS - SOUZA", "Gerente": "10 - GERENCIA REGIAO NORTE", "RCA": "1007 - CAMILA DUARTE - EQUIPE EXPRESS", "Situacao": "ATIVO", "Status": "Sem vendas", "Novato": false, "Meta Necessaria (Dia)": 2108.23, "Vendas (Dia)": 0.0, "% Necessaria Dia": 0.0, "1o Pedido": "-", "Posit. Dia": 0.0, "Positivacao_Fonte": "hub", "Devol. (Dia)": null, "Zerado": true}, {"Supervisor": "11 - EQUIPE EXPRESS - SOUZA", "Gerente": "10 - GERENCIA REGIAO NORTE", "RCA": "1009 - LARISSA PINTO - EQUIPE EXPRESS", "Situacao": "ATIVO", "Status": "Sem vendas", "Novato": false, "Meta Necessaria (Dia)": 703.67, "Vendas (Dia)": 0.0, "% Necessaria Dia": 0.0, "1o Pedido": "-", "Posit. Dia": 0.0, "Positivacao_Fonte": "hub", "Devol. (Dia)": 264.34, "Zerado": true}, {"Supervisor": "11 - EQUIPE EXPRESS - SOUZA", "Gerente": "10 - GERENCIA REGIAO NORTE", "RCA": "1011 - VANESSA COSTA - EQUIPE EXPRESS", "Situacao": "ATIVO", "Status": "Sem vendas", "Novato": false, "Meta Necessaria (Dia)": 4986.64, "Vendas (Dia)": 0.0, "% Necessaria Dia": 0.0, "1o Pedido": "-", "Posit. Dia": 0.0, "Positivacao_Fonte": "hub", "Devol. (Dia)": null, "Zerado": true}]};
+
+// =========================================================================
+// PARSER (espelho de hub_parser.py / calc.py) — roda direto no navegador,
+// pra permitir carregar um dia novo sem depender de Claude/Python.
+// =========================================================================
+const XML_NS = 'urn:schemas-microsoft-com:office:spreadsheet';
+
+function lerAbasSpreadsheetML(xmlText) {
+  const texto = xmlText.replace(/^\uFEFF/, ''); // remove BOM se houver
+  const doc = new DOMParser().parseFromString(texto, 'text/xml');
+  const erro = doc.querySelector('parsererror');
+  if (erro) throw new Error('XML inválido: ' + erro.textContent.slice(0, 200));
+
+  const sheets = {};
+  const worksheets = doc.getElementsByTagNameNS(XML_NS, 'Worksheet');
+  for (const ws of worksheets) {
+    const nome = ws.getAttributeNS(XML_NS, 'Name');
+    const tables = ws.getElementsByTagNameNS(XML_NS, 'Table');
+    const linhas = [];
+    if (tables.length) {
+      const rowEls = tables[0].getElementsByTagNameNS(XML_NS, 'Row');
+      for (const rowEl of rowEls) {
+        const celulas = [];
+        let proximoIndex = 1;
+        const cellEls = rowEl.getElementsByTagNameNS(XML_NS, 'Cell');
+        for (const cellEl of cellEls) {
+          const idxAttr = cellEl.getAttributeNS(XML_NS, 'Index');
+          if (idxAttr) {
+            const idx = parseInt(idxAttr, 10);
+            while (proximoIndex < idx) { celulas.push(null); proximoIndex++; }
+          }
+          const dataEls = cellEl.getElementsByTagNameNS(XML_NS, 'Data');
+          celulas.push(dataEls.length ? dataEls[0].textContent : null);
+          proximoIndex++;
+          const mergeAttr = cellEl.getAttributeNS(XML_NS, 'MergeAcross');
+          if (mergeAttr) {
+            const span = parseInt(mergeAttr, 10);
+            for (let i = 0; i < span; i++) celulas.push(null);
+            proximoIndex += span;
+          }
+        }
+        linhas.push(celulas);
+      }
+    }
+    sheets[nome] = linhas;
+  }
+  return sheets;
+}
+
+function paraNumero(valor) {
+  // Mesma regra do hub_parser.py: só trata '.' como milhar quando também há vírgula.
+  if (valor === null || valor === undefined) return null;
+  let v = String(valor).trim();
+  if (v === '' || v === '-') return null;
+  v = v.replace('R$', '').trim().replace('%', '').trim();
+  if (v.includes(',')) v = v.replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(v);
+  return isNaN(n) ? null : n;
+}
+function paraPercentual(valor) {
+  if (valor === null || valor === undefined) return null;
+  let v = String(valor).trim();
+  if (v === '' || v === '-') return null;
+  v = v.replace('%', '').trim();
+  const n = parseFloat(v);
+  return isNaN(n) ? null : n / 100.0;
+}
+function paraKm(valor) {
+  if (valor === null || valor === undefined) return null;
+  const v = String(valor).trim().replace(/km/i, '').trim();
+  return paraNumero(v);
+}
+function acharLinhaCabecalho(linhas, obrigatorias) {
+  for (let i = 0; i < linhas.length; i++) {
+    const norm = new Set(linhas[i].filter(c => c).map(c => String(c).trim()));
+    if (obrigatorias.every(x => norm.has(x))) return i;
+  }
+  throw new Error('Não encontrei cabeçalho com: ' + obrigatorias.join(', '));
+}
+function extrairCodRcaENovato(rcaTexto) {
+  const bruto = String(rcaTexto || '');
+  const novato = bruto.trim().startsWith('[NOVATO]');
+  const limpo = bruto.replace(/^\[NOVATO\]\s*/, '');
+  const m = limpo.match(/^(\d+)\s*-/);
+  return { nome: limpo, novato, cod: m ? m[1] : null };
+}
+
+const NUM_COLS_DET = ['Meta Necessaria (Dia)', 'Meta Linear (Dia)', 'Vendas (Dia)', 'Devol. (Dia)',
+  'Posit. Dia', 'Meta Posit Dia', 'SKU PDV', 'Meta Mes (R$)', 'Vendas Mes (R$)'];
+const PCT_COLS_DET = ['% Linear Dia', '% Necessaria Dia', '% Mes'];
+
+function parseDetalhamentoRcaJS(sheets) {
+  const linhas = Object.values(sheets)[0] || [];
+  const headerIdx = acharLinhaCabecalho(linhas, ['RCA', 'Supervisor']);
+  const header = linhas[headerIdx].map(c => c ? String(c).trim() : '');
+  const dataRows = linhas.slice(headerIdx + 1).filter(r => r.some(c => c));
+
+  const registros = [];
+  for (const r of dataRows) {
+    const obj = {};
+    header.forEach((h, i) => { if (h) obj[h] = i < r.length ? r[i] : null; });
+    if (!obj['RCA']) continue;
+    registros.push(obj);
+  }
+
+  registros.forEach(rec => {
+    NUM_COLS_DET.forEach(c => { if (c in rec) rec[c] = paraNumero(rec[c]); });
+    PCT_COLS_DET.forEach(c => { if (c in rec) rec[c] = paraPercentual(rec[c]); });
+    if ('KM' in rec) rec['KM'] = paraKm(rec['KM']);
+    const { nome, novato, cod } = extrairCodRcaENovato(rec['RCA']);
+    rec['RCA'] = nome;
+    rec['Novato'] = novato;
+    rec['Cod RCA'] = cod;
+  });
+  return registros;
+}
+
+function parseVisaoMensalJS(sheets) {
+  const nomeAba = Object.keys(sheets).find(n => n.toLowerCase() !== 'legenda');
+  const linhas = sheets[nomeAba] || [];
+  const headerIdx = acharLinhaCabecalho(linhas, ['RCA', 'Supervisor']);
+  const header = linhas[headerIdx].map(c => c ? String(c).trim() : '');
+  const dataRows = linhas.slice(headerIdx + 1).filter(r => r.some(c => c));
+  const sectionRow = headerIdx > 0 ? linhas[headerIdx - 1].map(c => c ? String(c).trim() : '') : [];
+
+  let blocoAtual = 'INFORMACOES';
+  const colBloco = [];
+  for (let i = 0; i < header.length; i++) {
+    const label = i < sectionRow.length ? sectionRow[i] : '';
+    if (label) blocoAtual = label;
+    colBloco.push(blocoAtual);
+  }
+  const contagem = {};
+  const colsUnicas = header.map((nome, i) => {
+    const chave = colBloco[i] + '::' + nome;
+    contagem[chave] = (contagem[chave] || 0) + 1;
+    return contagem[chave] > 1 ? `${chave}__${contagem[chave]}` : chave;
+  });
+
+  const brutos = dataRows.map(r => {
+    const obj = {};
+    colsUnicas.forEach((k, i) => { obj[k] = i < r.length ? r[i] : null; });
+    return obj;
+  });
+
+  function pick(rec, bloco, nome) {
+    const chave = bloco + '::' + nome;
+    return chave in rec ? rec[chave] : undefined;
+  }
+
+  return brutos.map(rec => {
+    const { nome, cod } = extrairCodRcaENovato(pick(rec, 'INFORMACOES', 'RCA'));
+    return {
+      'RCA': nome,
+      'Cod RCA': cod,
+      'Media_Positivacao_Dia': paraNumero(pick(rec, 'POSITIVACAO', 'Media')),
+      'SKU_PDV_Mensal': paraNumero(pick(rec, 'POSITIVACAO', 'SKU/PDV')),
+      'Dias_Sem_Venda_Qtde': paraNumero(pick(rec, 'SEM VENDAS', 'Qtde')),
+      'Dias_Sem_Venda_Pct': paraPercentual(pick(rec, 'SEM VENDAS', '%')),
+      'Dias_Abaixo_Meta_Qtde': paraNumero(pick(rec, '% META DIA', 'Dias<100%')),
+      'Dias_Abaixo_Meta_Pct': paraPercentual(pick(rec, '% META DIA', '%<100%')),
+      'Media_Horario_1o_Pedido': pick(rec, 'HORA 1o PEDIDO', 'Media'),
+      'Pedidos_Apos_12h_Qtde': paraNumero(pick(rec, 'HORA 1o PEDIDO', 'Ped>12h')),
+      'Pedidos_Apos_12h_Pct': paraPercentual(pick(rec, 'HORA 1o PEDIDO', '%>12h')),
+    };
+  });
+}
+
+function montarBaseRcaJS(detRegistros, vmRegistros) {
+  const vmPorCod = {};
+  vmRegistros.forEach(v => { if (v['Cod RCA']) vmPorCod[v['Cod RCA']] = v; });
+  const codsDet = new Set(detRegistros.map(d => d['Cod RCA']));
+  const codsVm = new Set(vmRegistros.map(v => v['Cod RCA']));
+  const avisos = [];
+  const faltandoMensal = [...codsDet].filter(c => c && !codsVm.has(c));
+  const faltandoDiario = [...codsVm].filter(c => c && !codsDet.has(c));
+  if (faltandoMensal.length) avisos.push(`${faltandoMensal.length} RCA(s) no detalhamento sem visão mensal (provável admissão recente): ${faltandoMensal.join(', ')}`);
+  if (faltandoDiario.length) avisos.push(`${faltandoDiario.length} RCA(s) na visão mensal sem detalhamento hoje (provável desligamento/afastamento): ${faltandoDiario.join(', ')}`);
+
+  const campos = ['Media_Positivacao_Dia', 'SKU_PDV_Mensal', 'Dias_Sem_Venda_Qtde', 'Dias_Sem_Venda_Pct',
+    'Dias_Abaixo_Meta_Qtde', 'Dias_Abaixo_Meta_Pct', 'Media_Horario_1o_Pedido',
+    'Pedidos_Apos_12h_Qtde', 'Pedidos_Apos_12h_Pct'];
+
+  const linhas = detRegistros.map(rec => {
+    const vm = vmPorCod[rec['Cod RCA']] || {};
+    const out = Object.assign({}, rec);
+    campos.forEach(f => { out[f] = f in vm ? vm[f] : null; });
+    const posit = out['Posit. Dia'];
+    out['Ticket_Medio_Dia'] = (posit !== null && posit !== undefined && posit !== 0)
+      ? out['Vendas (Dia)'] / posit : null;
+    out['Positivacao_Fonte'] = 'hub';
+    return out;
+  });
+  return { linhas, avisos };
+}
+
+function resumoPorSupervisorJS(linhas) {
+  const porSup = {};
+  linhas.forEach(r => {
+    const sup = r['Supervisor'];
+    if (!porSup[sup]) {
+      porSup[sup] = {
+        Supervisor: sup, Gerente: r['Gerente'], Qtd_RCAs: 0,
+        Meta_Necessaria_Dia: 0, Previsao_Dia: 0, Vendas_Dia: 0, Devolucao_Dia: 0, Positivacao_Dia: 0,
+        Meta_Posit_Dia: 0, _skuSoma: 0, _skuN: 0, Meta_Mes: 0, Vendas_Mes: 0,
+      };
+    }
+    const s = porSup[sup];
+    s.Qtd_RCAs++;
+    s.Meta_Necessaria_Dia += r['Meta Necessaria (Dia)'] || 0;
+    s.Previsao_Dia += valPrevisao(r) || 0;
+    s.Vendas_Dia += r['Vendas (Dia)'] || 0;
+    s.Devolucao_Dia += r['Devol. (Dia)'] || 0;
+    s.Positivacao_Dia += r['Posit. Dia'] || 0;
+    s.Meta_Posit_Dia += r['Meta Posit Dia'] || 0;
+    if (r['SKU PDV'] !== null && r['SKU PDV'] !== undefined) { s._skuSoma += r['SKU PDV']; s._skuN++; }
+    s.Meta_Mes += r['Meta Mes (R$)'] || 0;
+    s.Vendas_Mes += r['Vendas Mes (R$)'] || 0;
+  });
+  return Object.values(porSup).map(s => ({
+    ...s,
+    SKU_PDV_Medio: s._skuN ? s._skuSoma / s._skuN : null,
+    Pct_Necessaria_Dia: s.Meta_Necessaria_Dia ? s.Vendas_Dia / s.Meta_Necessaria_Dia : null,
+    Pct_Mes: s.Meta_Mes ? s.Vendas_Mes / s.Meta_Mes : null,
+    Ticket_Medio_Dia: s.Positivacao_Dia ? s.Vendas_Dia / s.Positivacao_Dia : null,
+  }));
+}
+
+function resumoPorGerenciaJS(porSup) {
+  const porGer = {};
+  porSup.forEach(s => {
+    const g = s.Gerente;
+    if (!porGer[g]) {
+      porGer[g] = { Gerente: g, _sups: new Set(), Qtd_RCAs: 0, Meta_Necessaria_Dia: 0, Vendas_Dia: 0, Positivacao_Dia: 0, Meta_Mes: 0, Vendas_Mes: 0 };
+    }
+    const b = porGer[g];
+    b._sups.add(s.Supervisor);
+    b.Qtd_RCAs += s.Qtd_RCAs;
+    b.Meta_Necessaria_Dia += s.Meta_Necessaria_Dia;
+    b.Vendas_Dia += s.Vendas_Dia;
+    b.Positivacao_Dia += s.Positivacao_Dia;
+    b.Meta_Mes += s.Meta_Mes;
+    b.Vendas_Mes += s.Vendas_Mes;
+  });
+  return Object.values(porGer).map(b => ({
+    Gerente: b.Gerente, Qtd_Supervisores: b._sups.size, Qtd_RCAs: b.Qtd_RCAs,
+    Meta_Necessaria_Dia: b.Meta_Necessaria_Dia, Vendas_Dia: b.Vendas_Dia,
+    Positivacao_Dia: b.Positivacao_Dia, Meta_Mes: b.Meta_Mes, Vendas_Mes: b.Vendas_Mes,
+    Pct_Necessaria_Dia: b.Meta_Necessaria_Dia ? b.Vendas_Dia / b.Meta_Necessaria_Dia : null,
+    Pct_Mes: b.Meta_Mes ? b.Vendas_Mes / b.Meta_Mes : null,
+  }));
+}
+
+function rcasZeradosJS(linhas) {
+  return linhas.filter(r => r['Status'] === 'Sem vendas');
+}
+
+function lerArquivoComoTexto(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsText(file, 'utf-8');
+  });
+}
+
+// ---- Botão "Carregar dados": processa os arquivos e substitui DATA por completo ----
+document.getElementById('btn-carregar-dados').addEventListener('click', async () => {
+  const statusEl = document.getElementById('upload-status');
+  statusEl.className = 'status';
+  statusEl.textContent = 'Lendo arquivos...';
+
+  const fileDet = document.getElementById('file-detalhamento').files[0];
+  const fileVm = document.getElementById('file-visao-mensal').files[0];
+  const dataInput = document.getElementById('input-data-ref').value;
+
+  if (!fileDet) {
+    statusEl.className = 'status erro';
+    statusEl.textContent = 'Selecione ao menos o arquivo de Detalhamento por RCA.';
+    return;
+  }
+
+  try {
+    const textoDet = await lerArquivoComoTexto(fileDet);
+    const sheetsDet = lerAbasSpreadsheetML(textoDet);
+    const detRegistros = parseDetalhamentoRcaJS(sheetsDet);
+
+    let vmRegistros = [];
+    if (fileVm) {
+      const textoVm = await lerArquivoComoTexto(fileVm);
+      const sheetsVm = lerAbasSpreadsheetML(textoVm);
+      vmRegistros = parseVisaoMensalJS(sheetsVm);
+    }
+
+    const { linhas, avisos } = montarBaseRcaJS(detRegistros, vmRegistros);
+    const porSup = resumoPorSupervisorJS(linhas);
+    const porGer = resumoPorGerenciaJS(porSup);
+    const zerados = rcasZeradosJS(linhas);
+
+    // Se o campo "Data de referência" ficar em branco, mantém a mesma data já
+    // carregada (em vez de assumir "hoje"). Isso evita que um upload de
+    // atualização de vendas no mesmo dia caia numa "gaveta" de salvamento
+    // diferente e pareça apagar Previsão/Meta SKU/Meta Pos./Positivação manuais.
+    DATA.data_ref = dataInput || DATA.data_ref || new Date().toISOString().slice(0, 10);
+    DATA.rcas = linhas;
+    DATA.supervisores = porSup;
+    DATA.gerencia = porGer;
+    DATA.zerados = zerados;
+
+    OVERRIDES_KEY = 'painel_pe_overrides_' + DATA.data_ref;
+    EXCLUIDOS_KEY = 'painel_pe_excluidos_' + DATA.data_ref;
+    INCLUIDOS_KEY = 'painel_pe_incluidos_' + DATA.data_ref;
+    aplicarTodosOverridesSalvos();
+    aplicarInclusoesSalvas();
+    recomputarAgregados();
+    horaAtualizacaoDados = new Date();
+
+    document.getElementById('input-data-ref').value = DATA.data_ref;
+    renderAll();
+    renderEquipePanel();
+
+    let msg = `Carregado: ${linhas.length} RCA(s), ${porSup.length} supervisor(es).`;
+    if (!fileVm) msg += ' (sem visão mensal — média/mix do mês por RCA ficam em branco)';
+    if (avisos.length) msg += '\n[aviso] ' + avisos.join('\n[aviso] ');
+    statusEl.className = 'status sucesso';
+    statusEl.textContent = msg;
+    document.getElementById('dot-dados').classList.add('ok');
+  } catch (e) {
+    statusEl.className = 'status erro';
+    statusEl.textContent = 'Erro ao processar: ' + e.message;
+    console.error(e);
+  }
+});
+
+// =========================================================================
+// FORMATAÇÃO E COMPONENTES VISUAIS
+// =========================================================================
+function fmtMoney(v) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  return v.toLocaleString('pt-BR', {style:'currency', currency:'BRL', minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function fmtPct(v) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  return (v*100).toFixed(1) + '%';
+}
+function fmtNum(v, d=1) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  return Number(v).toLocaleString('pt-BR', {maximumFractionDigits:d});
+}
+function gaugeClass(pct) {
+  if (pct === null || pct === undefined || isNaN(pct)) return 'bad';
+  if (pct >= 1) return 'ok';
+  if (pct >= 0.7) return 'warn';
+  return 'bad';
+}
+function gaugeHtml(pct) {
+  if (pct === null || pct === undefined || isNaN(pct)) {
+    return `<div class="gauge-wrap"><div class="gauge"><div class="tick"></div></div><span class="gauge-pct mono">—</span></div>`;
+  }
+  const cls = gaugeClass(pct);
+  const width = Math.min(pct, 1.3) / 1.3 * 100;
+  return `<div class="gauge-wrap"><div class="gauge"><div class="fill ${cls}" style="width:${width}%"></div><div class="tick" style="left:${100/1.3}%"></div></div><span class="gauge-pct mono">${fmtPct(pct)}</span></div>`;
+}
+function statusBadge(status, situacao, novato) {
+  let html = '';
+  if (situacao && situacao !== 'ATIVO') {
+    html += `<span class="badge bad">${situacao}</span> `;
+  }
+  if (status === 'Sem vendas') {
+    html += `<span class="badge bad">Sem vendas</span>`;
+  } else if (status) {
+    html += `<span class="badge ok">Com vendas</span>`;
+  }
+  if (novato) html += ` <span class="badge novato">Novo</span>`;
+  return html;
+}
+
+// ---- Painel lateral "Carregar dados": abre/fecha ----
+function abrirPainelDados() {
+  document.getElementById('upload-bar').classList.add('aberto');
+  document.getElementById('upload-overlay').classList.add('aberto');
+}
+function fecharPainelDados() {
+  document.getElementById('upload-bar').classList.remove('aberto');
+  document.getElementById('upload-overlay').classList.remove('aberto');
+}
+document.getElementById('btn-abrir-dados').addEventListener('click', abrirPainelDados);
+document.getElementById('btn-fechar-dados').addEventListener('click', fecharPainelDados);
+document.getElementById('upload-overlay').addEventListener('click', fecharPainelDados);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharPainelDados(); });
+
+// ---- Tabs ----
+document.querySelectorAll('#tabnav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#tabnav button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ---- Filtro de busca (genérico: só esconde linhas da tabela) ----
+document.querySelectorAll('input[type=search]').forEach(inp => {
+  if (inp.id === 'input-filtro-gerencia') return; // esse tem tratamento próprio abaixo
+  inp.addEventListener('input', () => {
+    const table = document.getElementById(inp.dataset.target);
+    const term = inp.value.toLowerCase();
+    table.querySelectorAll('tbody tr').forEach(tr => {
+      tr.style.display = tr.textContent.toLowerCase().includes(term) ? '' : 'none';
+    });
+  });
+});
+
+// ---- Filtro por gerência: reconstrói tabela, gráficos e os cards do topo
+// (kpi-grid) considerando só a(s) gerência(s) que casam com o texto digitado ----
+let filtroGerenciaTexto = '';
+const inputFiltroGerencia = document.getElementById('input-filtro-gerencia');
+if (inputFiltroGerencia) {
+  inputFiltroGerencia.addEventListener('input', () => {
+    filtroGerenciaTexto = inputFiltroGerencia.value.trim();
+    renderKpis();
+    renderGerencia();
+  });
+}
+
+// ---- KPIs (nível gerência) ----
+// "Necessidade do dia" = soma das Previsões manuais digitadas na aba Parcial
+// (valPrevisao). RCA sem previsão digitada entra como 0 na soma. Vendido hoje
+// e Vendido no mês continuam vindo direto da planilha de Detalhamento (HUB).
+// Quando há um filtro de gerência ativo (aba Gerência), os cards mostram só
+// os números daquela gerência filtrada.
+function renderKpis() {
+  let rcas = rcasVisiveis();
+  if (filtroGerenciaTexto) {
+    const termo = filtroGerenciaTexto.toLowerCase();
+    rcas = rcas.filter(r => (r.Gerente || '').toLowerCase().includes(termo));
+  }
+  const totalVendaDia = rcas.reduce((s,r) => s + (r['Vendas (Dia)']||0), 0);
+  const totalPrevisaoDia = rcas.reduce((s,r) => s + (valPrevisao(r) || 0), 0);
+  const totalVendaMes = rcas.reduce((s,r) => s + (r['Vendas Mes (R$)']||0), 0);
+  const totalMetaMes = rcas.reduce((s,r) => s + (r['Meta Mes (R$)']||0), 0);
+  let zerados = DATA.zerados;
+  if (filtroGerenciaTexto) {
+    const termo = filtroGerenciaTexto.toLowerCase();
+    zerados = zerados.filter(z => (z.Gerente || '').toLowerCase().includes(termo));
+  }
+  const cards = [
+    {label: 'Vendido hoje', value: fmtMoney(totalVendaDia), sub: `${fmtPct(totalPrevisaoDia ? totalVendaDia/totalPrevisaoDia : null)} da necessidade do dia`},
+    {label: 'Necessidade do dia', value: fmtMoney(totalPrevisaoDia), sub: `${rcas.length} RCAs ativos`},
+    {label: 'Vendido no mês', value: fmtMoney(totalVendaMes), sub: `${fmtPct(totalMetaMes ? totalVendaMes/totalMetaMes : null)} da meta do mês`},
+    {label: 'RCAs sem venda hoje', value: zerados.length, sub: zerados.length > 0 ? 'precisam de atenção' : 'todos venderam'},
+  ];
+  document.getElementById('kpi-grid').innerHTML = cards.map(c => `
+    <div class="kpi-card">
+      <div class="label">${c.label}</div>
+      <div class="value mono">${c.value}</div>
+      <div class="sub">${c.sub}</div>
+    </div>`).join('');
+}
+
+// ---- Tabela + gráficos: Gerência ----
+let chartGerenciaDia = null;
+let chartGerenciaMes = null;
+function gerenciasFiltradas() {
+  if (!filtroGerenciaTexto) return DATA.gerencia;
+  const termo = filtroGerenciaTexto.toLowerCase();
+  return DATA.gerencia.filter(r => r.Gerente.toLowerCase().includes(termo));
+}
+function renderGerencia() {
+  const rows = gerenciasFiltradas();
+  const table = document.getElementById('table-gerencia');
+  table.innerHTML = `
+    <thead><tr>
+      <th>Gerência</th><th>Sup.</th><th>RCAs</th>
+      <th>Necess. dia</th><th>Vendido dia</th><th>% dia</th>
+      <th>Meta mês</th><th>Vendido mês</th><th>% mês</th>
+    </tr></thead>
+    <tbody>${rows.map(r => `
+      <tr>
+        <td>${r.Gerente}</td>
+        <td class="mono">${r.Qtd_Supervisores}</td>
+        <td class="mono">${r.Qtd_RCAs}</td>
+        <td class="mono">${fmtMoney(r.Meta_Necessaria_Dia)}</td>
+        <td class="mono">${fmtMoney(r.Vendas_Dia)}</td>
+        <td>${gaugeHtml(r.Pct_Necessaria_Dia)}</td>
+        <td class="mono">${fmtMoney(r.Meta_Mes)}</td>
+        <td class="mono">${fmtMoney(r.Vendas_Mes)}</td>
+        <td>${gaugeHtml(r.Pct_Mes)}</td>
+      </tr>`).join('')}</tbody>`;
+
+  if (chartGerenciaDia) chartGerenciaDia.destroy();
+  chartGerenciaDia = new Chart(document.getElementById('chart-gerencia-dia'), {
+    type: 'bar',
+    data: {
+      labels: rows.map(r => r.Gerente),
+      datasets: [
+        {label: 'Necessidade do dia', data: rows.map(r => r.Meta_Necessaria_Dia), backgroundColor: '#D9D3E0'},
+        {label: 'Vendido hoje', data: rows.map(r => r.Vendas_Dia), backgroundColor: '#4F2170'},
+      ]
+    },
+    options: { responsive: true, plugins: { legend: { labels: { color: '#766C81' } } },
+      scales: { x: { ticks: { color: '#766C81' }, grid: { display: false } }, y: { ticks: { color: '#766C81' }, grid: { color: '#E3DCEA' } } } }
+  });
+  if (chartGerenciaMes) chartGerenciaMes.destroy();
+  chartGerenciaMes = new Chart(document.getElementById('chart-gerencia-mes'), {
+    type: 'doughnut',
+    data: { labels: rows.map(r => r.Gerente), datasets: [{ data: rows.map(r => (r.Pct_Mes||0)*100), backgroundColor: ['#4F2170','#B5760A','#9B8AA8'] }] },
+    options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: '#766C81' } } } }
+  });
+}
+
+// ---- Baixar imagem de uma seção de gerência (Supervisores/RCAs) — captura a
+// tabela inteira via html2canvas, mesmo a parte que ficaria escondida na rolagem ----
+function baixarImagemDaSecao(secaoEl, nomeArquivo) {
+  const tabela = secaoEl.querySelector('table');
+  const btn = secaoEl.querySelector('.btn-baixar-secao');
+  if (btn) btn.style.visibility = 'hidden';
+  html2canvas(tabela, { backgroundColor: '#FFFFFF', scale: 2 }).then(canvas => {
+    if (btn) btn.style.visibility = 'visible';
+    const link = document.createElement('a');
+    link.download = nomeArquivo;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  });
+}
+function ligarBotoesBaixarSecao(container, prefixoArquivo) {
+  container.querySelectorAll('.btn-baixar-secao').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const secao = btn.closest('.gerencia-secao');
+      baixarImagemDaSecao(secao, `${prefixoArquivo}_${btn.dataset.slug}_${DATA.data_ref}.png`);
+    });
+  });
+}
+
+// ---- Tabela: Supervisores ----
+function gerenciasOrdenadas() {
+  return [...new Set(rcasVisiveis().map(r => r.Gerente).filter(Boolean))].sort();
+}
+
+function renderSupervisores() {
+  const rows = DATA.supervisores;
+  document.getElementById('count-supervisores').textContent = `(${rows.length})`;
+  const gerencias = gerenciasOrdenadas();
+  const container = document.getElementById('container-supervisores');
+
+  container.innerHTML = gerencias.map(ger => {
+    const doGrupo = rows.filter(r => r.Gerente === ger);
+    const slug = ger.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    return `
+      <div class="gerencia-secao">
+        <h3>
+          <span class="titulo-esq">${ger} <span class="count-mini">(${doGrupo.length} supervisor${doGrupo.length===1?'':'es'})</span></span>
+          <button class="btn-baixar-secao" data-slug="${slug}">Baixar imagem</button>
+        </h3>
+        <div class="table-scroll"><table>
+          <thead><tr>
+            <th>Supervisor</th><th>RCAs</th>
+            <th>Necess. dia</th><th>Vendido dia</th><th>% dia</th>
+            <th>Ticket médio</th><th>Positivação dia</th>
+            <th>Meta mês</th><th>Vendido mês</th><th>% mês</th>
+          </tr></thead>
+          <tbody>${doGrupo.map(r => `
+            <tr>
+              <td>${r.Supervisor}</td>
+              <td class="mono">${r.Qtd_RCAs}</td>
+              <td class="mono">${fmtMoney(r.Previsao_Dia)}</td>
+              <td class="mono">${fmtMoney(r.Vendas_Dia)}</td>
+              <td>${gaugeHtml(r.Pct_Necessaria_Dia)}</td>
+              <td class="mono">${fmtMoney(r.Ticket_Medio_Dia)}</td>
+              <td class="mono">${fmtNum(r.Positivacao_Dia,0)}</td>
+              <td class="mono">${fmtMoney(r.Meta_Mes)}</td>
+              <td class="mono">${fmtMoney(r.Vendas_Mes)}</td>
+              <td>${gaugeHtml(r.Pct_Mes)}</td>
+            </tr>`).join('')}</tbody>
+        </table></div>
+      </div>`;
+  }).join('');
+  ligarBotoesBaixarSecao(container, 'supervisores');
+}
+
+// ---- Overrides manuais: positivação, meta (previsão), meta de positivação e meta SKU ----
+// ---- Horário da última atualização de dados (upload da planilha de vendas).
+// Mostrado em cada bloco de equipe na aba Parcial. ----
+let horaAtualizacaoDados = new Date();
+function fmtHora(d) {
+  if (!d) return '—';
+  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+let OVERRIDES_KEY = 'painel_pe_overrides_' + DATA.data_ref;
+function loadOverrides() {
+  try { return JSON.parse(localStorage.getItem(OVERRIDES_KEY)) || {}; } catch (e) { return {}; }
+}
+function saveOverridesObj(all) { localStorage.setItem(OVERRIDES_KEY, JSON.stringify(all)); }
+function setOverride(codRca, campo, valor) {
+  const all = loadOverrides();
+  if (!all[codRca]) all[codRca] = {};
+  all[codRca][campo] = valor;
+  saveOverridesObj(all);
+  aplicarOverrideNaLinha(codRca, campo, valor);
+}
+function aplicarOverrideNaLinha(codRca, campo, valor) {
+  const row = DATA.rcas.find(r => r['Cod RCA'] === codRca);
+  if (!row) return;
+  if (campo === 'posit') {
+    row['Posit. Dia'] = valor;
+    row['Positivacao_Fonte'] = 'manual (editado no painel)';
+    row['Ticket_Medio_Dia'] = valor > 0 ? row['Vendas (Dia)'] / valor : null;
+  } else if (campo === 'previsao') {
+    row['Previsao_Manual'] = valor;
+  } else if (campo === 'metaPos') {
+    row['MetaPos_Manual'] = valor;
+  } else if (campo === 'metaSku') {
+    row['MetaSku_Manual'] = valor;
+  }
+}
+function aplicarTodosOverridesSalvos() {
+  const all = loadOverrides();
+  Object.entries(all).forEach(([codRca, campos]) => {
+    Object.entries(campos).forEach(([campo, valor]) => aplicarOverrideNaLinha(codRca, campo, valor));
+  });
+}
+aplicarTodosOverridesSalvos();
+
+// ---- Inclusão/exclusão de vendedores (RCAs): afeta todas as abas, pois os
+// agregados de Supervisor/Gerência/Zerados são recalculados a partir da lista visível ----
+let EXCLUIDOS_KEY = 'painel_pe_excluidos_' + DATA.data_ref;
+let INCLUIDOS_KEY = 'painel_pe_incluidos_' + DATA.data_ref;
+function loadExcluidos() {
+  try { return JSON.parse(localStorage.getItem(EXCLUIDOS_KEY)) || []; } catch (e) { return []; }
+}
+function saveExcluidos(arr) { localStorage.setItem(EXCLUIDOS_KEY, JSON.stringify(arr)); }
+function loadIncluidos() {
+  try { return JSON.parse(localStorage.getItem(INCLUIDOS_KEY)) || []; } catch (e) { return []; }
+}
+function saveIncluidos(arr) { localStorage.setItem(INCLUIDOS_KEY, JSON.stringify(arr)); }
+
+function aplicarInclusoesSalvas() {
+  const salvos = loadIncluidos();
+  salvos.forEach(row => {
+    if (!DATA.rcas.some(r => r['Cod RCA'] === row['Cod RCA'])) DATA.rcas.push(row);
+  });
+}
+aplicarInclusoesSalvas();
+
+function rcasVisiveis() {
+  const excl = new Set(loadExcluidos());
+  return DATA.rcas.filter(r => !excl.has(r['Cod RCA']));
+}
+function recomputarAgregados() {
+  const visiveis = rcasVisiveis();
+  DATA.supervisores = resumoPorSupervisorJS(visiveis);
+  DATA.gerencia = resumoPorGerenciaJS(DATA.supervisores);
+  DATA.zerados = rcasZeradosJS(visiveis);
+}
+recomputarAgregados();
+
+function excluirRca(cod) {
+  const excl = loadExcluidos();
+  if (!excl.includes(cod)) excl.push(cod);
+  saveExcluidos(excl);
+  recomputarAgregados();
+  renderAll();
+  renderEquipePanel();
+}
+function incluirRca(cod) {
+  const excl = loadExcluidos().filter(c => c !== cod);
+  saveExcluidos(excl);
+  recomputarAgregados();
+  renderAll();
+  renderEquipePanel();
+}
+function adicionarNovoRca({ cod, nome, supervisor, metaDia, metaPos }) {
+  const refSup = DATA.rcas.find(r => r.Supervisor === supervisor);
+  const gerente = refSup ? refSup.Gerente : (gerenciasOrdenadas()[0] || '');
+  const novaLinha = {
+    Situacao: 'ATIVO', 'PJ/CLT': null, Direcao: refSup ? refSup.Direcao : null,
+    Coordenador: refSup ? refSup.Coordenador : null, Gerente: gerente, Supervisor: supervisor,
+    RCA: `${cod} - ${nome}`, KM: null,
+    'Meta Necessaria (Dia)': metaDia ?? 0, 'Meta Linear (Dia)': metaDia ?? 0,
+    'Vendas (Dia)': 0, 'Devol. (Dia)': null, '% Linear Dia': 0, '% Necessaria Dia': 0,
+    '1o Pedido': '-', Status: 'Sem vendas', 'Posit. Dia': 0, 'Meta Posit Dia': metaPos ?? null,
+    'SKU PDV': null, 'Meta Mes (R$)': 0, 'Vendas Mes (R$)': 0, '% Mes': 0, Novato: true,
+    'Cod RCA': cod, Media_Positivacao_Dia: null, SKU_PDV_Mensal: null,
+    Dias_Sem_Venda_Qtde: null, Dias_Sem_Venda_Pct: null, Dias_Abaixo_Meta_Qtde: null,
+    Dias_Abaixo_Meta_Pct: null, Media_Horario_1o_Pedido: null, Pedidos_Apos_12h_Qtde: null,
+    Pedidos_Apos_12h_Pct: null, Ticket_Medio_Dia: null, 'Posit. Dia (HUB)': 0, Positivacao_Fonte: 'manual (incluído no painel)',
+  };
+  DATA.rcas.push(novaLinha);
+  const incluidos = loadIncluidos();
+  incluidos.push(novaLinha);
+  saveIncluidos(incluidos);
+  recomputarAgregados();
+  renderAll();
+  renderEquipePanel();
+}
+
+function popularSelectSupervisorEquipe() {
+  const select = document.getElementById('novo-rca-supervisor');
+  const atuais = [...new Set(DATA.rcas.map(r => r.Supervisor))].sort();
+  select.innerHTML = atuais.map(s => `<option value="${s}">${s}</option>`).join('');
+}
+
+function renderEquipePanel() {
+  popularSelectSupervisorEquipe();
+
+  const termo = (document.getElementById('busca-equipe-ativos').value || '').toLowerCase();
+  const ativos = rcasVisiveis().filter(r =>
+    !termo || `${r.RCA} ${r.Supervisor} ${r['Cod RCA']}`.toLowerCase().includes(termo)
+  ).sort((a, b) => a.RCA.localeCompare(b.RCA));
+
+  const listaAtivos = document.getElementById('lista-equipe-ativos');
+  listaAtivos.innerHTML = ativos.length ? ativos.map(r => `
+    <div class="item-equipe">
+      <div class="info"><strong>${r.RCA}</strong><span>${r.Supervisor}</span></div>
+      <button class="excluir" data-cod="${r['Cod RCA']}">Excluir</button>
+    </div>`).join('') : '<div class="vazio">Nenhum vendedor encontrado.</div>';
+
+  listaAtivos.querySelectorAll('button.excluir').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const row = DATA.rcas.find(r => r['Cod RCA'] === btn.dataset.cod);
+      if (confirm(`Excluir ${row ? row.RCA : btn.dataset.cod} do painel? Ele para de contar em todas as abas até ser restaurado.`)) {
+        excluirRca(btn.dataset.cod);
+      }
+    });
+  });
+
+  const excl = new Set(loadExcluidos());
+  const excluidosRows = DATA.rcas.filter(r => excl.has(r['Cod RCA'])).sort((a, b) => a.RCA.localeCompare(b.RCA));
+  const listaExcluidos = document.getElementById('lista-equipe-excluidos');
+  listaExcluidos.innerHTML = excluidosRows.length ? excluidosRows.map(r => `
+    <div class="item-equipe">
+      <div class="info"><strong>${r.RCA}</strong><span>${r.Supervisor}</span></div>
+      <button class="restaurar" data-cod="${r['Cod RCA']}">Restaurar</button>
+    </div>`).join('') : '<div class="vazio">Nenhum vendedor excluído.</div>';
+
+  listaExcluidos.querySelectorAll('button.restaurar').forEach(btn => {
+    btn.addEventListener('click', () => incluirRca(btn.dataset.cod));
+  });
+}
+
+document.getElementById('busca-equipe-ativos').addEventListener('input', renderEquipePanel);
+
+document.getElementById('btn-adicionar-rca').addEventListener('click', () => {
+  const statusEl = document.getElementById('equipe-status');
+  const cod = document.getElementById('novo-rca-cod').value.trim();
+  const nome = document.getElementById('novo-rca-nome').value.trim();
+  const supervisor = document.getElementById('novo-rca-supervisor').value;
+  const metaDia = parseFloat(document.getElementById('novo-rca-meta-dia').value) || 0;
+  const metaPos = parseFloat(document.getElementById('novo-rca-meta-pos').value) || null;
+
+  if (!cod || !nome || !supervisor) {
+    statusEl.className = 'status erro';
+    statusEl.textContent = 'Preencha ao menos código, nome e supervisor.';
+    return;
+  }
+  if (DATA.rcas.some(r => r['Cod RCA'] === cod)) {
+    statusEl.className = 'status erro';
+    statusEl.textContent = `Já existe um RCA com o código ${cod} no painel.`;
+    return;
+  }
+  adicionarNovoRca({ cod, nome, supervisor, metaDia, metaPos });
+  statusEl.className = 'status sucesso';
+  statusEl.textContent = `${cod} - ${nome} adicionado a ${supervisor}.`;
+  document.getElementById('novo-rca-cod').value = '';
+  document.getElementById('novo-rca-nome').value = '';
+  document.getElementById('novo-rca-meta-dia').value = '';
+  document.getElementById('novo-rca-meta-pos').value = '';
+});
+
+function abrirPainelEquipe() {
+  renderEquipePanel();
+  document.getElementById('equipe-bar').classList.add('aberto');
+  document.getElementById('equipe-overlay').classList.add('aberto');
+}
+function fecharPainelEquipe() {
+  document.getElementById('equipe-bar').classList.remove('aberto');
+  document.getElementById('equipe-overlay').classList.remove('aberto');
+}
+document.getElementById('btn-abrir-equipe').addEventListener('click', abrirPainelEquipe);
+document.getElementById('btn-fechar-equipe').addEventListener('click', fecharPainelEquipe);
+document.getElementById('equipe-overlay').addEventListener('click', fecharPainelEquipe);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharPainelEquipe(); });
+
+// Previsão e Meta Pos. são 100% manuais: nascem em branco e só mudam quando o
+// usuário digita. Nunca mais "herdam" o valor recalculado do HUB (Meta Necessária/
+// Meta Posit Dia), que muda a cada novo upload da planilha de vendas.
+function valPrevisao(r) { return r.Previsao_Manual ?? null; }
+function valMetaPos(r) { return r.MetaPos_Manual ?? null; }
+function valMetaSku(r) { return r.MetaSku_Manual ?? null; }
+
+function fonteBadge(fonte) {
+  if (!fonte) return '';
+  if (fonte.startsWith('manual')) return `<span class="badge manual" title="${fonte}">manual</span>`;
+  return '';
+}
+
+// ---- Tabela: RCAs ----
+function renderRcas() {
+  const rows = rcasVisiveis();
+  document.getElementById('count-rcas').textContent = `(${rows.length})`;
+  const gerencias = gerenciasOrdenadas();
+  const container = document.getElementById('container-rcas');
+
+  container.innerHTML = gerencias.map(ger => {
+    const doGrupo = rows.filter(r => r.Gerente === ger);
+    const slug = ger.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    return `
+      <div class="gerencia-secao">
+        <h3>
+          <span class="titulo-esq">${ger} <span class="count-mini">(${doGrupo.length} RCA${doGrupo.length===1?'':'s'})</span></span>
+          <button class="btn-baixar-secao" data-slug="${slug}">Baixar imagem</button>
+        </h3>
+        <div class="table-scroll"><table data-gerencia="${ger}">
+          <thead><tr>
+            <th>RCA</th><th>Supervisor</th><th>Status</th>
+            <th>Necess. dia</th><th>Vendido dia</th><th>% necess.</th>
+            <th>Ticket médio</th><th>Posit. dia</th><th>1º pedido</th>
+            <th>Vendido mês</th><th>% mês</th><th></th>
+          </tr></thead>
+          <tbody>${doGrupo.map(r => `
+            <tr data-cod="${r['Cod RCA']}">
+              <td>${r.RCA}</td>
+              <td>${r.Supervisor}</td>
+              <td>${statusBadge(r.Status, r.Situacao, r.Novato)}</td>
+              <td class="mono">${fmtMoney(valPrevisao(r))}</td>
+              <td class="mono">${fmtMoney(r['Vendas (Dia)'])}</td>
+              <td>${gaugeHtml(r['% Necessaria Dia'])}</td>
+              <td class="mono ticket-cell">${fmtMoney(r.Ticket_Medio_Dia)}</td>
+              <td>
+                <div class="posit-cell">
+                  <input class="posit-input mono" type="number" min="0" step="1"
+                    value="${r['Posit. Dia'] ?? 0}" data-cod="${r['Cod RCA']}">
+                  ${fonteBadge(r.Positivacao_Fonte)}
+                </div>
+              </td>
+              <td class="mono">${r['1o Pedido'] || '—'}</td>
+              <td class="mono">${fmtMoney(r['Vendas Mes (R$)'])}</td>
+              <td>${gaugeHtml(r['% Mes'])}</td>
+              <td><button class="btn-excluir-rca" data-cod="${r['Cod RCA']}" title="Excluir vendedor do painel">&times;</button></td>
+            </tr>`).join('')}</tbody>
+        </table></div>
+      </div>`;
+  }).join('');
+  ligarBotoesBaixarSecao(container, 'rcas');
+
+  container.querySelectorAll('.posit-input').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const cod = inp.dataset.cod;
+      const valor = parseFloat(inp.value) || 0;
+      setOverride(cod, 'posit', valor);
+      const row = DATA.rcas.find(r => r['Cod RCA'] === cod);
+      const tr = inp.closest('tr');
+      tr.querySelector('.ticket-cell').textContent = fmtMoney(row['Ticket_Medio_Dia']);
+      const badgeSlot = inp.closest('.posit-cell');
+      if (!badgeSlot.querySelector('.badge.manual')) badgeSlot.insertAdjacentHTML('beforeend', fonteBadge(row.Positivacao_Fonte));
+      renderKpis();
+      if (document.getElementById('tab-parcial').classList.contains('active')) renderParcial();
+    });
+  });
+
+  container.querySelectorAll('.btn-excluir-rca').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cod = btn.dataset.cod;
+      const row = DATA.rcas.find(r => r['Cod RCA'] === cod);
+      if (confirm(`Excluir ${row ? row.RCA : cod} do painel? Ele para de contar em todas as abas até ser restaurado no painel "Equipe".`)) {
+        excluirRca(cod);
+      }
+    });
+  });
+}
+
+// ---- Aba Parcial: bloco por supervisor, no formato que já é enviado no WhatsApp ----
+function formatMoneyInputValue(v) {
+  if (v === null || v === undefined || isNaN(v)) return '';
+  return Number(v).toLocaleString('pt-BR', {style:'currency', currency:'BRL', minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function parseMoneyInputValue(text) {
+  if (!text) return null;
+  const limpo = String(text).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(limpo);
+  return isNaN(n) ? null : n;
+}
+
+function pctFatColor(pct) {
+  // vermelho (0%) -> âmbar (~50%) -> verde (100%+), tons vivos (estilo semáforo)
+  if (pct === null || pct === undefined || isNaN(pct)) return { bg: '#EDEAF0', fg: '#6B647A' };
+  const p = Math.max(0, Math.min(pct, 1.2));
+  const hue = p <= 0.5 ? (p / 0.5) * 40 : 40 + ((p - 0.5) / 0.7) * 80;
+  return { bg: `hsl(${Math.min(hue,120)}, 78%, 52%)`, fg: '#ffffff' };
+}
+
+function montarBlocoSupervisor(nomeSupervisor, rcasDoSupervisor) {
+  const slug = nomeSupervisor.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+  let somaMetaSku = 0, nMetaSku = 0, somaSku = 0, somaMetaPos = 0, somaPosit = 0,
+      somaPrevisao = 0, somaRealizado = 0;
+
+  const linhas = rcasDoSupervisor.map(r => {
+    const metaSku = valMetaSku(r);
+    const metaPos = valMetaPos(r);
+    const previsao = valPrevisao(r);
+    const sku = r['SKU PDV'];
+    const posit = r['Posit. Dia'];
+    const realizado = r['Vendas (Dia)'];
+    const ticket = r.Ticket_Medio_Dia;
+    const diff = (previsao !== null && realizado !== null) ? previsao - realizado : null;
+    const pctFat = (previsao) ? realizado / previsao : null;
+    const cor = pctFatColor(pctFat);
+
+    if (metaSku !== null) { somaMetaSku += metaSku; nMetaSku++; }
+    if (sku !== null && sku !== undefined) somaSku += sku;
+    if (metaPos !== null) somaMetaPos += metaPos;
+    if (posit !== null && posit !== undefined) somaPosit += posit;
+    if (previsao !== null) somaPrevisao += previsao;
+    if (realizado !== null && realizado !== undefined) somaRealizado += realizado;
+
+    return `
+      <tr data-cod="${r['Cod RCA']}" class="${r.Status === 'Sem vendas' ? 'linha-sem-venda' : ''}">
+        <td class="rca-nome">${r.RCA}</td>
+        <td class="editavel"><input type="number" step="0.1" class="meta-sku-input" data-cod="${r['Cod RCA']}" value="${metaSku ?? ''}" placeholder="—"></td>
+        <td>${fmtNum(sku)}</td>
+        <td class="editavel"><input type="number" step="1" class="meta-pos-input" data-cod="${r['Cod RCA']}" value="${metaPos ?? ''}" placeholder="—"></td>
+        <td>${fmtNum(posit,0)}</td>
+        <td class="destaque editavel"><input type="text" inputmode="decimal" class="previsao-input" data-cod="${r['Cod RCA']}" value="${formatMoneyInputValue(previsao)}" placeholder="R$ 0,00"></td>
+        <td>${fmtMoney(ticket)}</td>
+        <td class="destaque">${fmtMoney(realizado)}</td>
+        <td class="diff">${fmtMoney(diff)}</td>
+        <td class="pctfat" style="background:${cor.bg}; color:${cor.fg}">${fmtPct(pctFat)}</td>
+      </tr>`;
+  }).join('');
+
+  const ticketTotal = somaPosit > 0 ? somaRealizado / somaPosit : null;
+  const diffTotal = somaPrevisao - somaRealizado;
+  const pctFatTotal = somaPrevisao > 0 ? somaRealizado / somaPrevisao : null;
+  const corTotal = pctFatColor(pctFatTotal);
+
+  return `
+    <div class="parcial-block" id="bloco-${slug}">
+      <div class="titulo">${nomeSupervisor} <span class="hora-atualizacao">· atualizado às ${fmtHora(horaAtualizacaoDados)}</span></div>
+      <div class="toolbar-baixar"><button data-slug="${slug}" class="btn-baixar-parcial">Baixar imagem</button></div>
+      <table class="parcial-table">
+        <thead><tr>
+          <th>RCA</th><th>Meta SKU</th><th>SKU</th><th>Meta Pos.</th><th>Positivação</th>
+          <th>Previsão</th><th>Ticket médio</th><th>Realizado</th><th>Diff</th><th>% Fat</th>
+        </tr></thead>
+        <tbody>${linhas}</tbody>
+        <tfoot><tr class="total">
+          <td class="rca-nome">Total</td>
+          <td>${nMetaSku ? fmtNum(somaMetaSku/nMetaSku) : '—'}</td>
+          <td>${fmtNum(somaSku)}</td>
+          <td>${fmtNum(somaMetaPos,0)}</td>
+          <td>${fmtNum(somaPosit,0)}</td>
+          <td class="destaque">${fmtMoney(somaPrevisao)}</td>
+          <td>${fmtMoney(ticketTotal)}</td>
+          <td class="destaque">${fmtMoney(somaRealizado)}</td>
+          <td class="diff">${fmtMoney(diffTotal)}</td>
+          <td class="pctfat" style="background:${corTotal.bg}; color:${corTotal.fg}">${fmtPct(pctFatTotal)}</td>
+        </tr></tfoot>
+      </table>
+    </div>`;
+}
+
+function renderParcial() {
+  const rcas = rcasVisiveis();
+  const gerencias = gerenciasOrdenadas();
+  const supervisoresPorGerencia = {};
+  gerencias.forEach(ger => {
+    supervisoresPorGerencia[ger] = [...new Set(rcas.filter(r => r.Gerente === ger).map(r => r.Supervisor))].sort();
+  });
+
+  const select = document.getElementById('select-supervisor-parcial');
+  const valorAtual = select.value;
+  let opcoesHtml = `<option value="__todos__">Todos (agrupado por gerência)</option>`;
+  gerencias.forEach(ger => {
+    opcoesHtml += `<option value="__ger__:${ger}">${ger} — todos os supervisores</option>`;
+    opcoesHtml += `<optgroup label="${ger}">` +
+      supervisoresPorGerencia[ger].map(s => `<option value="${s}">${s}</option>`).join('') +
+      `</optgroup>`;
+  });
+  select.innerHTML = opcoesHtml;
+
+  const todosValores = ['__todos__', ...gerencias.map(g => '__ger__:' + g), ...gerencias.flatMap(g => supervisoresPorGerencia[g])];
+  if (valorAtual && todosValores.includes(valorAtual)) select.value = valorAtual;
+  if (!select.dataset.ligado) {
+    select.addEventListener('change', renderParcial);
+    select.dataset.ligado = '1';
+  }
+
+  const filtro = select.value || '__todos__';
+  const container = document.getElementById('parcial-container');
+
+  function blocosDaGerencia(ger, comCabecalho) {
+    const supsDoGrupo = supervisoresPorGerencia[ger] || [];
+    const blocos = supsDoGrupo.map(sup => montarBlocoSupervisor(sup, rcas.filter(r => r.Supervisor === sup))).join('');
+    if (!comCabecalho) return blocos;
+    return `<div class="gerencia-secao"><h3>${ger} <span class="count-mini">(${supsDoGrupo.length} supervisor${supsDoGrupo.length===1?'':'es'})</span></h3>${blocos}</div>`;
+  }
+
+  if (filtro === '__todos__') {
+    container.innerHTML = gerencias.map(ger => blocosDaGerencia(ger, true)).join('');
+  } else if (filtro.startsWith('__ger__:')) {
+    const ger = filtro.slice('__ger__:'.length);
+    container.innerHTML = blocosDaGerencia(ger, false);
+  } else {
+    container.innerHTML = montarBlocoSupervisor(filtro, rcas.filter(r => r.Supervisor === filtro));
+  }
+
+  container.querySelectorAll('.meta-sku-input, .meta-pos-input').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const cod = inp.dataset.cod;
+      const valor = inp.value === '' ? null : parseFloat(inp.value);
+      const campo = inp.classList.contains('meta-sku-input') ? 'metaSku' : 'metaPos';
+      setOverride(cod, campo, valor);
+      renderParcial();
+    });
+  });
+
+  container.querySelectorAll('.previsao-input').forEach(inp => {
+    inp.addEventListener('focus', () => {
+      const num = parseMoneyInputValue(inp.value);
+      inp.value = num !== null ? num : '';
+      inp.select();
+    });
+    inp.addEventListener('blur', () => {
+      const cod = inp.dataset.cod;
+      const valor = parseMoneyInputValue(inp.value);
+      setOverride(cod, 'previsao', valor);
+      recomputarAgregados();
+      renderKpis();
+      renderSupervisores();
+      renderParcial();
+    });
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.blur(); });
+  });
+
+  container.querySelectorAll('.btn-baixar-parcial').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const bloco = document.getElementById('bloco-' + btn.dataset.slug);
+      const toolbar = bloco.querySelector('.toolbar-baixar');
+      toolbar.style.visibility = 'hidden';
+      html2canvas(bloco, { backgroundColor: '#FFFFFF', scale: 2 }).then(canvas => {
+        toolbar.style.visibility = 'visible';
+        const link = document.createElement('a');
+        link.download = `parcial_${btn.dataset.slug}_${DATA.data_ref}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      });
+    });
+  });
+}
+
+// ---- Tabela: Zerados ----
+function renderZerados() {
+  const rows = DATA.zerados;
+  document.getElementById('count-zerados').textContent = `(${rows.length})`;
+  const container = document.getElementById('container-zerados');
+  if (rows.length === 0) {
+    container.innerHTML = '<div class="empty">Nenhum RCA zerado hoje.</div>';
+    return;
+  }
+  const gerencias = [...new Set(rows.map(r => r.Gerente).filter(Boolean))].sort();
+  container.innerHTML = gerencias.map(ger => {
+    const doGrupo = rows.filter(r => r.Gerente === ger);
+    return `
+      <div class="gerencia-secao">
+        <h3>${ger} <span class="count-mini">(${doGrupo.length})</span></h3>
+        <div class="table-scroll"><table>
+          <thead><tr>
+            <th>RCA</th><th>Supervisor</th><th>Situação</th>
+            <th>Necess. dia</th><th>1º pedido</th><th>Positivação dia</th><th></th>
+          </tr></thead>
+          <tbody>${doGrupo.map(r => `
+            <tr data-cod="${r['Cod RCA']}">
+              <td>${r.RCA}</td>
+              <td>${r.Supervisor}</td>
+              <td>${statusBadge(r.Status, r.Situacao, r.Novato)}</td>
+              <td class="mono">${fmtMoney(r['Meta Necessaria (Dia)'])}</td>
+              <td class="mono">${r['1o Pedido'] || '—'}</td>
+              <td class="mono">${fmtNum(r['Posit. Dia'],0)}</td>
+              <td><button class="btn-excluir-rca" data-cod="${r['Cod RCA']}" title="Excluir vendedor do painel">&times;</button></td>
+            </tr>`).join('')}</tbody>
+        </table></div>
+      </div>`;
+  }).join('');
+
+  container.querySelectorAll('.btn-excluir-rca').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cod = btn.dataset.cod;
+      const row = DATA.rcas.find(r => r['Cod RCA'] === cod);
+      if (confirm(`Excluir ${row ? row.RCA : cod} do painel? Ele para de contar em todas as abas até ser restaurado no painel "Equipe".`)) {
+        excluirRca(cod);
+      }
+    });
+  });
+}
+
+// ---- Orquestra todas as abas (chamado no load e depois de "Carregar dados") ----
+function renderAll() {
+  renderKpis();
+  renderGerencia();
+  renderSupervisores();
+  renderRcas();
+  renderZerados();
+  renderParcial();
+}
+renderAll();
+// Pré-preenche a data de referência com a data já carregada no painel, para
+// que um upload de atualização de vendas no mesmo dia não precise (e não
+// corra o risco) de o usuário redigitar a data manualmente.
+{ const inpData = document.getElementById('input-data-ref'); if (inpData && DATA.data_ref) inpData.value = DATA.data_ref; }
+
+// ---- Sort ao clicar no cabeçalho (delegado no document — funciona mesmo com
+// tabelas recriadas dinamicamente, como as seções por gerência e a Parcial) ----
+if (DATA.rcas && DATA.rcas.length) { const d = document.getElementById('dot-dados'); if (d) d.classList.add('ok'); }
+
+document.addEventListener('click', e => {
+  const th = e.target.closest('th');
+  if (!th) return;
+  const table = th.closest('table');
+  if (!table) return;
+  const idx = [...th.parentElement.children].indexOf(th);
+  const tbody = table.querySelector('tbody');
+  if (!tbody) return;
+  const rowsArr = [...tbody.querySelectorAll('tr')];
+  const asc = th.dataset.asc !== 'true';
+  table.querySelectorAll('th').forEach(h => delete h.dataset.asc);
+  th.dataset.asc = asc;
+  rowsArr.sort((a,b) => {
+    const av = a.children[idx]?.textContent.trim().replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',','.');
+    const bv = b.children[idx]?.textContent.trim().replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',','.');
+    const an = parseFloat(av), bn = parseFloat(bv);
+    if (!isNaN(an) && !isNaN(bn)) return asc ? an-bn : bn-an;
+    return asc
+      ? a.children[idx].textContent.localeCompare(b.children[idx].textContent)
+      : b.children[idx].textContent.localeCompare(a.children[idx].textContent);
+  });
+  rowsArr.forEach(r => tbody.appendChild(r));
+});
+
+// ---- Upload da planilha "Previsão dia" (modelo com 1 aba por supervisor) para
+// atualizar em lote os overrides de Previsão usados na aba Parcial ----
+function extrairCodDoVendedor(texto) {
+  if (!texto) return null;
+  const m = String(texto).trim().match(/^(\d+)\s*-/);
+  return m ? m[1] : null;
+}
+function parsePrevisaoDiaWorkbook(wb) {
+  const atualizados = [];
+  const naoEncontrados = [];
+  wb.SheetNames.forEach(nomeAba => {
+    const ws = wb.Sheets[nomeAba];
+    const linhas = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+    // acha a linha de cabeçalho (contém "Vendedor")
+    let idxHeader = -1;
+    for (let i = 0; i < linhas.length; i++) {
+      if (linhas[i].some(c => String(c || '').trim().toLowerCase() === 'vendedor')) { idxHeader = i; break; }
+    }
+    if (idxHeader === -1) return; // aba sem esse formato (ex.: Cadastro de Vendedores, Apps Script)
+    const header = linhas[idxHeader].map(c => String(c || '').trim().toLowerCase());
+    const colVendedor = header.indexOf('vendedor');
+    const colPrevisao = header.findIndex(c => c.startsWith('previsão do dia') || c.startsWith('previsao do dia'));
+    if (colVendedor === -1 || colPrevisao === -1) return;
+
+    for (let i = idxHeader + 1; i < linhas.length; i++) {
+      const linha = linhas[i];
+      if (!linha || linha.every(c => c === null || c === '')) continue;
+      const cod = extrairCodDoVendedor(linha[colVendedor]);
+      if (!cod) continue;
+      const valorPrevisao = linha[colPrevisao];
+      if (valorPrevisao === null || valorPrevisao === '' || isNaN(valorPrevisao)) continue;
+
+      const existe = DATA.rcas.some(r => r['Cod RCA'] === cod);
+      if (!existe) { naoEncontrados.push(`${cod} (${nomeAba})`); continue; }
+      setOverride(cod, 'previsao', Number(valorPrevisao));
+      atualizados.push(cod);
+    }
+  });
+  return { atualizados, naoEncontrados };
+}
+
+document.getElementById('btn-atualizar-previsao').addEventListener('click', () => {
+  const statusEl = document.getElementById('previsao-upload-status');
+  const file = document.getElementById('file-previsao-dia').files[0];
+  if (!file) {
+    statusEl.className = 'status erro';
+    statusEl.textContent = 'Selecione o arquivo da planilha "Previsão dia" primeiro.';
+    return;
+  }
+  statusEl.className = 'status';
+  statusEl.textContent = 'Lendo planilha...';
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const { atualizados, naoEncontrados } = parsePrevisaoDiaWorkbook(wb);
+      renderParcial();
+      if (atualizados.length === 0) {
+        statusEl.className = 'status erro';
+        statusEl.textContent = 'Nenhuma previsão foi identificada nessa planilha. Confirme se ela segue o modelo (abas com colunas "Vendedor" e "Previsão do Dia").';
+      } else {
+        statusEl.className = 'status sucesso';
+        let msg = `${atualizados.length} previsão(ões) atualizada(s) com sucesso.`;
+        if (naoEncontrados.length) msg += `\nRCAs da planilha que não estão no painel de hoje: ${naoEncontrados.join(', ')}.`;
+        statusEl.textContent = msg;
+      }
+    } catch (err) {
+      statusEl.className = 'status erro';
+      statusEl.textContent = 'Erro ao ler a planilha: ' + err.message;
+    }
+  };
+  reader.onerror = () => {
+    statusEl.className = 'status erro';
+    statusEl.textContent = 'Não foi possível ler o arquivo.';
+  };
+  reader.readAsArrayBuffer(file);
+});
+</script>
+
+</body>
+</html>
